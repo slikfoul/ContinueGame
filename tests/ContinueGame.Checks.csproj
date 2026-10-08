@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SessionRecord.cs" Link="SessionRecord.cs" />
+    <Compile Include="../PasswordProtection.cs" Link="PasswordProtection.cs" />
+    <Compile Include="../PortablePasswordProtection.cs" Link="PortablePasswordProtection.cs" />
+    <Compile Include="../LoadingState.cs" Link="LoadingState.cs" />
+  </ItemGroup>
+</Project>

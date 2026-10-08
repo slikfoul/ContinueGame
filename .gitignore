@@ -1,0 +1,9 @@
+bin/
+obj/
+tests/bin/
+tests/obj/
+tests/scratch-*/
+research/
+dist/
+backups/
+*.user
