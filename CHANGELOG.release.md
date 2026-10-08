@@ -1,8 +1,7 @@
 # 1.0.0
 
-- Кнопка «Продолжить» / Continue в главном меню.
-- Автоматический выбор последнего персонажа и подключение к последнему серверу с сохранённым паролем.
-- Хранение зашифрованного пароля для Windows, Linux и macOS.
-- Обновление данных только после успешного входа.
-- Заголовок Loading и плавная непрерывная полоса во время ожидания до штатного экрана загрузки Valheim; оригинальная картинка и подсказки игры сохраняются.
-- Только текущий фактический этап над полосой на тёмном экране до штатной загрузки; оригинальный экран Valheim остаётся без дополнений мода.
+- Adds a Continue button to the main menu to reconnect to your last server with your saved character and password.
+- Stores encrypted passwords on Windows, Linux and macOS.
+- Updates the saved session only after a successful connection.
+- Shows Loading, the current connection stage and an animated gold bar before Valheim's loading screen.
+- Supports dedicated server addresses, Steam connections and PlayFab crossplay servers.

@@ -1,3 +1,11 @@
+# 1.0.0
+
+- Adds a Continue button to the main menu to reconnect to your last server with your saved character and password.
+- Stores encrypted passwords on Windows, Linux and macOS.
+- Updates the saved session only after a successful connection.
+- Shows Loading, the current connection stage and an animated gold bar before Valheim's loading screen.
+- Supports dedicated server addresses, Steam connections and PlayFab crossplay servers.
+
 # 0.2.2
 
 - Исправлено преждевременное исчезновение панели: текущий этап и полоса остаются видны во время соединения до появления самой загрузочной картинки Valheim.

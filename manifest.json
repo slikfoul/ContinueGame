@@ -1,8 +1,8 @@
 {
   "name": "ContinueGame",
-  "version_number": "0.2.2",
-  "website_url": "",
-  "description": "Continue your last Valheim server session with one click: saved character and password, current-stage text and a smooth bar before native loading, and password storage for Windows, Linux and macOS.",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/slikfoul/ContinueGame",
+  "description": "Continue your last Valheim server session with one click. Automatically selects your saved character and reconnects using an encrypted saved password.",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2351"
   ]

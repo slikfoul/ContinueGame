@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ContinueGame
 {
-    [BepInPlugin(PluginId, "ContinueGame", "0.2.2")]
+    [BepInPlugin(PluginId, "ContinueGame", "1.0.0")]
     public sealed class ContinueGamePlugin : BaseUnityPlugin
     {
         public const string PluginId = "Slikfoul.ContinueGame";

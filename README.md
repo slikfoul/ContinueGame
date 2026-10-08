@@ -2,6 +2,8 @@
 
 Continue your last Valheim server session with one click from the main menu.
 
+![Continue button in the Valheim main menu](https://raw.githubusercontent.com/slikfoul/ContinueGame/main/docs/screenshots/continue-button.png)
+
 ## Features
 
 - Adds a **Continue** button that selects your saved character and reconnects to your last server.
