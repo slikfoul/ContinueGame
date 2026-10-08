@@ -44,5 +44,3 @@ This builds the DLL, creates and validates the complete ZIP with its icon and ma
 For another existing profile, pass `-Profile 'ProfileName'`. To build only the archive without installing it, run `BuildPackage.ps1`.
 
 You can override the Valheim and BepInEx profile paths using the MSBuild properties `ValheimDir` and `ModProfile`. Game assemblies are used only for compilation and are not included in the package. Decompiled research files under `research` are excluded from both compilation and distribution.
-
-Author: Slikfoul.
