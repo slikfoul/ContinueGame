@@ -71,10 +71,27 @@ try
     Check(Rejects(() => portable.Protect(testPassword)) && new FileInfo(Path.Combine(keyDirectory, "password.key")).Length == 5, "Existing corrupted key is never silently replaced");
 
     var loading = new LoadingState();
-    Check(loading.Stage == LoadingStage.FindingServer, "Loading begins with server search");
-    loading.Advance(LoadingStage.LoadingWorld);
-    loading.Advance(LoadingStage.FindingServer);
-    Check(loading.Stage == LoadingStage.LoadingWorld, "Loading stages cannot move backwards");
+    Check(loading.Stage == LoadingStage.SelectingCharacter && !loading.Completed, "Loading begins before character selection");
+    LoadingStage[] loginStages = {
+        LoadingStage.SelectingCharacter, LoadingStage.RestoringPassword, LoadingStage.FindingServer,
+        LoadingStage.LoadingScene, LoadingStage.Connecting, LoadingStage.SendingPassword,
+        LoadingStage.Authenticating, LoadingStage.ReceivingWorld, LoadingStage.LoadingArea,
+        LoadingStage.PreparingCharacter, LoadingStage.Ready
+    };
+    foreach (LoadingStage stage in loginStages.Skip(1).Take(loginStages.Length - 2)) loading.Advance(stage);
+    Check(!loading.Completed && loading.Stage == LoadingStage.PreparingCharacter, "Spawn preparation does not imply a completed login");
+    loading.Complete();
+    Check(loading.Completed && loading.Visited.SequenceEqual(loginStages), "Fast and late stages remain visible in the full login history");
+    loading.Advance(LoadingStage.RestoringPassword);
+    loading.Advance(LoadingStage.Ready);
+    Check(loading.Visited.SequenceEqual(loginStages), "Duplicate and late callbacks cannot rewind or duplicate a completed login");
+    var passwordlessLoading = new LoadingState();
+    passwordlessLoading.Advance(LoadingStage.Connecting);
+    passwordlessLoading.Advance(LoadingStage.Authenticating);
+    passwordlessLoading.Advance(LoadingStage.Connecting);
+    Check(!passwordlessLoading.Visited.Contains(LoadingStage.SendingPassword) && passwordlessLoading.Stage == LoadingStage.Authenticating,
+        "Passwordless flow does not invent a password step or rewind after a delayed callback");
+    Check(Rejects(() => ((IList<LoadingStage>)loading.Visited).Add(LoadingStage.SelectingCharacter)), "Displayed history cannot be changed externally");
 
     string path = Path.Combine(folder, "session.json");
     var store = new SessionStore(path);
@@ -142,7 +159,10 @@ try
         Check(HasMember("FejdStartup", "m_menuButtons", true), "Installed menu navigation integration exists");
         Check(HasMember("ZNet", "SendPeerInfo"), "Installed password capture hook exists");
         Check(HasMember("ZNet", "InPasswordDialog"), "Installed password-dialog integration exists");
-        Check(HasMember("Hud", "UpdateBlackScreen") && HasMember("Hud", "m_loadingScreen", true), "Native loading-screen handoff integration exists");
+        foreach (string method in new[] { "ClientConnect", "RPC_ClientHandshake", "RPC_PeerInfo" })
+            Check(HasMember("ZNet", method), "Installed connection-stage hook: " + method);
+        Check(HasMember("Game", "FindSpawnPoint") && HasMember("Game", "SpawnPlayer"), "Installed area-loading and character-spawn hooks exist");
+        Check(HasMember("Hud", "UpdateBlackScreen") && HasMember("Hud", "m_loadingScreen", true) && HasMember("Hud", "m_loadingTip", true), "Native loading-screen handoff and caption integration exist");
     }
     using (var pluginStream = File.OpenRead(Path.Combine(project, "bin/Release/ContinueGame.dll")))
     using (var pluginPe = new PEReader(pluginStream))

@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ContinueGame
 {
-    [BepInPlugin(PluginId, "ContinueGame", "0.1.1")]
+    [BepInPlugin(PluginId, "ContinueGame", "0.2.0")]
     public sealed class ContinueGamePlugin : BaseUnityPlugin
     {
         public const string PluginId = "Slikfoul.ContinueGame";
@@ -57,10 +57,10 @@ namespace ContinueGame
             if (Instance == this) Instance = null;
         }
 
-        internal void CancelPending()
+        internal void CancelPending(bool completed = false)
         {
-            _loadingScreen?.Dispose();
-            _loadingScreen = null;
+            if (completed) _loadingScreen?.Complete();
+            else { _loadingScreen?.Dispose(); _loadingScreen = null; }
             RestorePassword();
             _pending = null;
             _pendingPassword = null;
@@ -120,6 +120,7 @@ namespace ContinueGame
                 CancelPending();
                 return;
             }
+            if (status == ZNet.ConnectionStatus.Connected) _loadingScreen?.Advance(LoadingStage.LoadingArea);
             if (status != ZNet.ConnectionStatus.Connected || Game.instance == null || Player.m_localPlayer == null) return;
             try
             {
@@ -133,7 +134,7 @@ namespace ContinueGame
                 Logger.LogInfo("Last successful server and character saved; password protected.");
             }
             catch (Exception) { Logger.LogWarning("The successful session could not be saved. The previous session was kept."); }
-            finally { CancelPending(); }
+            finally { CancelPending(completed: true); }
         }
 
         internal void CaptureJoin(FejdStartup startup)
@@ -199,6 +200,8 @@ namespace ContinueGame
             if (_saved == null || _menu == null || _busy) return;
             try
             {
+                _busy = true;
+                BeginLoading(_menu);
                 PlayerProfile selected = null;
                 foreach (PlayerProfile profile in SaveSystem.GetAllPlayerProfiles())
                 {
@@ -207,26 +210,29 @@ namespace ContinueGame
                 }
                 if (selected == null)
                 {
+                    CancelPending();
                     Warning(Text("Сохранённый персонаж не найден. Войдите обычным способом, чтобы сохранить новый вход.",
                         "The saved character was not found. Join normally to save a new session."));
                     return;
                 }
+                AccessTools.Method(typeof(FejdStartup), "SelectCharacter").Invoke(_menu,
+                    new object[] { selected.GetFilename(), selected.m_fileSource });
+                _loadingScreen?.Advance(LoadingStage.RestoringPassword);
                 string password;
                 try { password = _passwordProtection.Unprotect(_saved.ProtectedPassword); }
                 catch (Exception)
                 {
+                    CancelPending();
                     Warning(Text("Не удалось прочитать сохранённый пароль. Войдите обычным способом и введите пароль снова.",
                         "The saved password could not be read. Join normally and enter your password again."));
                     return;
                 }
-                AccessTools.Method(typeof(FejdStartup), "SelectCharacter").Invoke(_menu,
-                    new object[] { selected.GetFilename(), selected.m_fileSource });
                 _previousPassword = (string)PasswordField.GetValue(null);
                 _passwordInjected = true;
                 // A passwordless server must not inherit a command-line password either.
                 PasswordField.SetValue(null, password.Length == 0 ? null : password);
                 _pendingPassword = password;
-                _busy = true;
+                _loadingScreen?.Advance(LoadingStage.FindingServer);
                 _menu.SetServerToJoin(RestoreServer(_saved));
                 _menu.JoinServer();
                 // Privilege/version checks can return without starting any connection.
@@ -257,6 +263,18 @@ namespace ContinueGame
                 Logger.LogInfo("Continue loading screen shown.");
             }
             catch (Exception) { Logger.LogWarning("Loading visuals could not be created; connection will continue normally."); }
+        }
+
+        internal void UpdateNativeLoading(Hud hud)
+        {
+            if (_loadingScreen == null) return;
+            try { _loadingScreen.HandOffToNative(hud); }
+            catch (Exception)
+            {
+                _loadingScreen.Dispose();
+                _loadingScreen = null;
+                Logger.LogWarning("Connection-stage captions could not be created; native loading will continue normally.");
+            }
         }
 
         internal void CreateButton(FejdStartup startup)
@@ -337,6 +355,11 @@ namespace ContinueGame
         private static class PasswordPatch
         {
             private static void Prefix(ZNet __instance, string password) { Instance?.CapturePassword(__instance, password); }
+            private static void Postfix(ZNet __instance)
+            {
+                if (!__instance.IsServer() && ZNet.GetConnectionStatus() == ZNet.ConnectionStatus.Connecting)
+                    Instance?._loadingScreen?.Advance(LoadingStage.Authenticating);
+            }
         }
 
         [HarmonyPatch(typeof(FejdStartup), "TransitionToMainScene")]
@@ -348,13 +371,54 @@ namespace ContinueGame
         [HarmonyPatch(typeof(FejdStartup), "LoadMainScene")]
         private static class WorldLoadingPatch
         {
-            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.LoadingWorld); }
+            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.LoadingScene); }
+        }
+
+        [HarmonyPatch(typeof(ZNet), "ClientConnect")]
+        private static class ConnectingPatch
+        {
+            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.Connecting); }
+        }
+
+        [HarmonyPatch(typeof(ZNet), "RPC_ClientHandshake")]
+        private static class HandshakePatch
+        {
+            private static void Prefix(ZNet __instance, bool needPassword)
+            {
+                if (!__instance.IsServer()) Instance?._loadingScreen?.Advance(
+                    needPassword ? LoadingStage.SendingPassword : LoadingStage.Authenticating);
+            }
+        }
+
+        [HarmonyPatch(typeof(ZNet), "RPC_PeerInfo")]
+        private static class WorldInfoPatch
+        {
+            private static void Prefix(ZNet __instance)
+            {
+                if (!__instance.IsServer()) Instance?._loadingScreen?.Advance(LoadingStage.ReceivingWorld);
+            }
+        }
+
+        [HarmonyPatch(typeof(Game), "SpawnPlayer")]
+        private static class CharacterSpawnPatch
+        {
+            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.PreparingCharacter); }
+            private static void Postfix(Player __result)
+            {
+                if (__result != null) Instance?._loadingScreen?.Advance(LoadingStage.Ready);
+            }
+        }
+
+        [HarmonyPatch(typeof(Game), "FindSpawnPoint")]
+        private static class SpawnAreaPatch
+        {
+            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.LoadingArea); }
         }
 
         [HarmonyPatch(typeof(Hud), "UpdateBlackScreen")]
         private static class NativeLoadingPatch
         {
-            private static void Postfix(Hud __instance) { Instance?._loadingScreen?.HandOffToNative(__instance); }
+            private static void Postfix(Hud __instance) { Instance?.UpdateNativeLoading(__instance); }
         }
     }
 }
