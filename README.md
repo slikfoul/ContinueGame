@@ -1,55 +1,47 @@
 # ContinueGame
 
-Клиентский мод для Valheim с кнопкой **«Продолжить»** в главном меню. В английском интерфейсе кнопка называется **Continue**.
+A client-side Valheim mod that adds a **Continue** button to the main menu. The button follows the game's selected language, with English and Russian labels.
 
-После первого обычного успешного входа на сервер мод запоминает сервер, персонажа и пароль. При следующем запуске кнопка выбирает этого персонажа и начинает подключение к этому серверу с сохранённым паролем. Данные обновляются только после успешного подключения и появления персонажа в игре. Неудачная попытка не заменяет последний успешный вход.
+After your first successful normal connection, the mod remembers the server, character and password. The next time you press Continue, it selects that character and connects to the same server using the saved password. The saved session is updated only after a successful connection and the character appears in the world. A failed attempt does not replace your last successful session.
 
-После нажатия «Продолжить» в паузе до штатной загрузки появляется заголовок Loading, текст текущего этапа и непрерывная золотистая полоса с плавным движением света, со шрифтом Valheim. Полоса показывает, что подключение выполняется; проценты и деления не используются. Как только появляется штатный экран загрузки Valheim, экран мода исчезает. Оригинальная картинка, подсказки и индикатор загрузки игры сохраняются. Штатные сообщения об ошибках и запросы пароля остаются доступны.
+While waiting for Valheim's native loading screen, the mod shows **Loading**, the current stage and a continuous gold bar with a moving glow, using the game's font. The animation indicates activity; it does not show a completion percentage or segmented steps. The mod's waiting screen disappears as soon as the native loading screen appears. Valheim's original artwork, tips and loading indicator are preserved. Native error messages and password prompts remain accessible.
 
-## Установка
+## Installation
 
-Единственная обязательная зависимость мода — **BepInEx 5**, настроенный для вашей версии Valheim и операционной системы. Установка на сервер не нужна. Хранение пароля предусмотрено для Windows, Linux и macOS; фактический запуск на Linux и macOS ещё требует проверки. На этих системах нужен уже работающий BepInEx для соответствующей сборки игры: Windows-пакет загрузчика сам по себе этого не обеспечивает.
+The only required dependency is **BepInEx 5**, configured for your Valheim version and operating system. The mod does not need to be installed on the server. Password storage is implemented for Windows, Linux and macOS; runtime use on Linux and macOS has not yet been verified. Those systems require a working BepInEx setup for the corresponding game build; a Windows loader package alone does not provide that setup.
 
-1. Закройте Valheim.
-2. Из архива скопируйте папку `BepInEx` в используемую папку игры или профиль менеджера модов, где уже находится папка `BepInEx`. В `BepInEx/plugins/ContinueGame/` должны лежать **оба** файла: `ContinueGame.dll` и `ContinueGame.dll.config`. Для Linux и macOS второй файл необходим для доступа к системной библиотеке прав доступа. Удалите прежнюю копию ContinueGame, если менеджер модов разместил её в другой папке.
-3. Запустите игру и первый раз войдите на сервер обычным способом: выберите персонажа и введите пароль. До первого сохранённого входа кнопка «Продолжить» неактивна.
-4. Вернувшись в главное меню или перезапустив игру, нажмите «Продолжить».
+1. Close Valheim.
+2. Copy the archive's `BepInEx` folder into the game directory or mod manager profile that already contains your `BepInEx` folder. Keep **both** `ContinueGame.dll` and `ContinueGame.dll.config` in `BepInEx/plugins/ContinueGame/`. The configuration file is required on Linux and macOS to load the system library used for file permissions. Remove any older copy of ContinueGame installed in a different folder.
+3. Launch the game and connect normally once: select a character and enter the server password. Continue is disabled until the first successful session has been saved.
+4. Return to the main menu or restart the game, then press Continue.
 
-Если персонаж удалён или сохранённый пароль нельзя расшифровать, мод показывает сообщение и оставляет обычный вход доступным. Если сервер недоступен или пароль изменился, используются штатные ошибки подключения Valheim. Войдите обычным способом с новым паролем, чтобы обновить сохранённый вход.
+If the saved character no longer exists or the password cannot be decrypted, the mod displays a message and leaves normal joining available. Unavailable servers and changed passwords use Valheim's native connection errors. Join normally with the new password to update the saved session.
 
-## Хранение данных
+## Saved data
 
-Файл `BepInEx/config/ContinueGame.last-session.json` содержит только последний успешный вход. Мод не записывает пароль в журнал.
+`BepInEx/config/ContinueGame.last-session.json` stores the last successful session. The mod does not write the password to its log.
 
-- **Windows:** пароль защищён Windows DPAPI и привязан к текущей учётной записи. Сохранённые входы ранних тестовых сборок совместимы. Перенос в другую учётную запись или ОС требует нового обычного входа.
-- **Linux и macOS:** пароль зашифрован AES-256; HMAC-SHA256 проверяет целостность до расшифровки. Случайный ключ хранится отдельно в `BepInEx/config/ContinueGame.keys/password.key`. Права каталога устанавливаются в `0700`, файла — в `0600`. Это защита локальными правами учётной записи, а не системным хранилищем секретов: тот, кто получил и файл входа, и ключ, сможет прочитать пароль. Для переноса нужны оба файла; проще заново войти обычным способом. Если ключ отсутствует или повреждён, автоматический вход показывает предупреждение.
+- **Windows:** the password is protected with Windows DPAPI and tied to your current Windows account. Saved sessions from earlier development builds remain compatible. Moving to another account or operating system requires a new normal connection.
+- **Linux and macOS:** the password is encrypted with AES-256, and HMAC-SHA256 verifies integrity before decryption. A random key is stored separately in `BepInEx/config/ContinueGame.keys/password.key`. Directory permissions are set to `0700`, and file permissions to `0600`. Protection relies on local account permissions rather than an operating system credential vault: anyone who obtains both the session file and the key can decrypt the password. Both files are needed for migration; joining normally again is simpler. A missing or damaged key causes automatic joining to display a warning.
 
-Чтобы забыть сохранённый вход, закройте игру и удалите файл входа; на Linux/macOS также можно удалить каталог `ContinueGame.keys`. Другие сохранения персонажей и миров мод не изменяет.
+To forget the saved session, close the game and delete the session file. On Linux and macOS, you can also delete the `ContinueGame.keys` directory. The mod does not change your other character or world saves.
 
-Поддержаны адреса выделенных серверов, подключения Steam и серверы crossplay через PlayFab. Автоматическое подключение использует штатные проверки совместимости и доступа Valheim.
+Dedicated server addresses, Steam connections and crossplay servers through PlayFab are supported. Automatic joining uses Valheim's native compatibility and access checks.
 
-## Сборка исходников
+## Building from source
 
-Для разработки используйте общий шаг сборки и установки. Закройте Valheim и приложение Thunderstore перед обновлением профиля. Overwolf может оставаться работающим в трее:
+Use the combined build and local installation script during development. Close Valheim and the Thunderstore application before updating the profile. Overwolf may remain running in the system tray:
 
 ```powershell
 .\BuildAndInstall.ps1
 ```
 
-Он собирает DLL, создаёт и проверяет ZIP с иконкой и манифестом, затем регистрирует пакет как **локальный мод** в профиле Thunderstore `Default`. Повторная сборка обновляет эту же запись, без второй копии DLL. Если мод выключен в менеджере, обновление сохраняет это состояние. Предыдущие файлы и реестр сохраняются для отката. Если игра или менеджер открыты, архив остаётся готовым, установка останавливается до их закрытия. Публикация не выполняется.
+This builds the DLL, creates and validates the complete ZIP with its icon and manifest, and registers the package as a **local mod** in the Thunderstore `Default` profile. Subsequent builds update the same entry without installing a duplicate DLL. If the mod is disabled in the manager, that state is preserved. Previous files and the profile registry are backed up. If the game or manager is open, the archive remains ready and installation stops until they are closed. Nothing is published.
 
-Для другого существующего профиля укажите `-Profile 'ИмяПрофиля'`. Чтобы только собрать архив без установки, используйте `BuildPackage.ps1`.
+For another existing profile, pass `-Profile 'ProfileName'`. To build only the archive without installing it, run `BuildPackage.ps1`.
 
-Отдельные команды для сборки DLL и проверок:
+You can override the Valheim and BepInEx profile paths using the MSBuild properties `ValheimDir` and `ModProfile`. Game assemblies are used only for compilation and are not included in the package. Decompiled research files under `research` are excluded from both compilation and distribution.
 
-```powershell
-dotnet build .\ContinueGame.csproj -c Release
-dotnet run --project .\tests\ContinueGame.Checks.csproj -c Release
-.\BuildPackage.ps1
-```
+The Thunderstore archive contains `manifest.json`, `README.md`, `CHANGELOG.md` and `icon.png` (256 x 256) at its root, plus both mod files under `BepInEx/plugins/ContinueGame/`. It also supports manual installation. The script validates the package but does not publish it. When uploading to Thunderstore, select the **AI Generated** category.
 
-Пути к Valheim и профилю BepInEx можно задать свойствами MSBuild `ValheimDir` и `ModProfile`. Игровые библиотеки используются для сборки и не включаются в установочный архив. Исследовательские копии игровых исходников из `research` не компилируются и не распространяются.
-
-Архив для Thunderstore содержит `manifest.json`, `README.md`, `CHANGELOG.md`, `icon.png` (256×256) в корне и оба файла мода в `BepInEx/plugins/ContinueGame/`. Он подходит и для ручной установки. Скрипт проверяет структуру и содержимое пакета, но не публикует его. При загрузке на Thunderstore выберите категорию **AI Generated**.
-
-Автор: Slikfoul.
+Author: Slikfoul.
