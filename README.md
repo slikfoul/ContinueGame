@@ -6,8 +6,6 @@ After your first successful normal connection, the mod remembers the server, cha
 
 Throughout the dark wait before Valheim's loading artwork appears, the mod shows **Loading**, a single current-stage label immediately above a continuous gold bar, and a smooth moving glow. The label follows actual operations: selecting the character, restoring the saved password, finding the server, loading the game scene, connecting, submitting the password when required, authenticating and receiving world data. Fast operations can change the label immediately; the connection is never delayed to keep a stage on screen. The bar indicates activity rather than a completion percentage.
 
-The mod panel stays visible through the initial native black fade and connection wait. It disappears when Valheim's world-loading artwork is actually visible. The standard screen keeps its original artwork, logo, tips and loading indicator, with no text or other UI added by ContinueGame. Native error messages and password prompts remain accessible.
-
 ## Installation
 
 The only required dependency is **BepInEx 5**, configured for your Valheim version and operating system. The mod does not need to be installed on the server. Password storage is implemented for Windows, Linux and macOS; runtime use on Linux and macOS has not yet been verified. Those systems require a working BepInEx setup for the corresponding game build; a Windows loader package alone does not provide that setup.
