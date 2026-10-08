@@ -19,19 +19,12 @@ if (@($metadata.dependencies).Count -ne 1 -or $metadata.dependencies[0] -cne 'de
 }
 
 $assembly = Join-Path $PSScriptRoot 'bin\Release\ContinueGame.dll'
-$configuration = Join-Path $PSScriptRoot 'bin\Release\ContinueGame.dll.config'
-if (-not (Test-Path -LiteralPath $assembly) -or -not (Test-Path -LiteralPath $configuration)) { throw 'Build the DLL and its config first.' }
+if (-not (Test-Path -LiteralPath $assembly)) { throw 'Build the DLL first.' }
 $version = $metadata.version_number
 if ([Reflection.AssemblyName]::GetAssemblyName($assembly).Version.ToString(3) -cne $version) { throw 'Manifest and assembly versions differ.' }
 $pluginSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'ContinueGamePlugin.cs') -Raw
 if ($pluginSource -notmatch ('\[BepInPlugin\(PluginId, "ContinueGame", "' + [Regex]::Escape($version) + '"\)\]')) {
     throw 'Manifest and plugin versions differ.'
-}
-[xml]$configXml = Get-Content -LiteralPath $configuration -Raw
-foreach ($platform in @('linux', 'osx')) {
-    if (-not @($configXml.configuration.dllmap | Where-Object { $_.dll -eq 'ContinueGame.Posix' -and $_.os -eq $platform }).Count) {
-        throw "Missing native library mapping for $platform."
-    }
 }
 
 # Read PNG signature and IHDR without a platform-specific graphics dependency.
@@ -48,11 +41,10 @@ $pluginDirectory = Join-Path $packageRoot 'BepInEx\plugins\ContinueGame'
 New-Item -ItemType Directory -Path $pluginDirectory -Force | Out-Null
 $sources = [ordered]@{
     'manifest.json' = Join-Path $PSScriptRoot 'manifest.json'
-    'README.md' = Join-Path $PSScriptRoot 'README.md'
+    'README.md' = Join-Path $PSScriptRoot 'README.Thunderstore.md'
     'CHANGELOG.md' = $changelogPath
     'icon.png' = $icon
     'BepInEx/plugins/ContinueGame/ContinueGame.dll' = $assembly
-    'BepInEx/plugins/ContinueGame/ContinueGame.dll.config' = $configuration
 }
 foreach ($relative in $sources.Keys) {
     Copy-Item -LiteralPath $sources[$relative] -Destination (Join-Path $packageRoot $relative) -Force
@@ -79,5 +71,5 @@ try {
 }
 finally { $zip.Dispose() }
 
-Write-Output 'Thunderstore package verified: manifest, versions, changelog order, icon, platform mappings, exact entries and all content hashes.'
+Write-Output 'Thunderstore package verified: manifest, versions, changelog order, icon, exact entries and all content hashes.'
 Get-Item -LiteralPath $archive | Select-Object FullName, Length

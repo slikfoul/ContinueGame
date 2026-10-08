@@ -49,7 +49,8 @@ namespace ContinueGame
         public void Save(SessionRecord record)
         {
             if (record == null || !record.IsValid()) throw new InvalidDataException("Invalid session.");
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_path)));
+            string directory = Path.GetDirectoryName(Path.GetFullPath(_path));
+            Directory.CreateDirectory(directory);
             string temporary = _path + ".tmp";
             try
             {

@@ -4,7 +4,7 @@
     <AssemblyName>ContinueGame</AssemblyName>
     <RootNamespace>ContinueGame</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>1.0.0</Version>
+    <Version>1.0.2</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ImplicitlyExpandNETStandardFacades>false</ImplicitlyExpandNETStandardFacades>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
@@ -30,8 +30,5 @@
     <Reference Include="Unity.TextMeshPro"><HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepInExCore)\BepInEx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="ContinueGame.dll.config" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

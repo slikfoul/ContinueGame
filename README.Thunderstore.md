@@ -37,16 +37,3 @@ Passwords are encrypted. Windows uses protection tied to your Windows account. L
 
 To forget a saved login, close Valheim and delete its ContinueGame profile directory. After moving to another account or operating system, connect normally to save a new login.
 
-## Building from source
-
-Use the combined build and local installation script during development. Close Valheim and the Thunderstore application before updating the profile. Overwolf may remain running in the system tray:
-
-```powershell
-.\BuildAndInstall.ps1
-```
-
-This builds the DLL, creates and validates the complete ZIP with its icon and manifest, and registers the package as a **local mod** in the Thunderstore `Default` profile. Subsequent builds update the same entry without installing a duplicate DLL. If the mod is disabled in the manager, that state is preserved. Previous files and the profile registry are backed up. If the game or manager is open, the archive remains ready and installation stops until they are closed. Nothing is published.
-
-For another existing profile, pass `-Profile 'ProfileName'`. To build only the archive without installing it, run `BuildPackage.ps1`.
-
-You can override the Valheim and BepInEx profile paths using the MSBuild properties `ValheimDir` and `ModProfile`. Game assemblies are used only for compilation and are not included in the package. Decompiled research files under `research` are excluded from both compilation and distribution.

@@ -70,6 +70,40 @@ try
     Check(Rejects(() => portable.Unprotect(portableEncrypted)), "Corrupted key rejected");
     Check(Rejects(() => portable.Protect(testPassword)) && new FileInfo(Path.Combine(keyDirectory, "password.key")).Length == 5, "Existing corrupted key is never silently replaced");
 
+    SessionRecord PrivateRecord(string protectedPassword) => new SessionRecord
+    {
+        ServerKind = "Dedicated", Address = "private.invalid", Port = 2456,
+        CharacterFilename = "private_character", CharacterId = 34567,
+        ProtectedPassword = protectedPassword
+    };
+    string configDirectory = Path.Combine(folder, "profile", "BepInEx", "config");
+    string gameSaveDirectory = Path.Combine(folder, "valheim-local-data");
+    string privatePath = PrivateSessionStorage.ResolveDirectory(configDirectory, gameSaveDirectory);
+    Check(!privatePath.StartsWith(Path.Combine(folder, "profile")), "Private data is outside exported profile");
+    Check(privatePath.StartsWith(Path.Combine(gameSaveDirectory, "ContinueGame") + Path.DirectorySeparatorChar), "Session is inside local Valheim data, separate from character files");
+    Check(privatePath == PrivateSessionStorage.ResolveDirectory(configDirectory, gameSaveDirectory), "Profile private path is stable");
+    Check(privatePath != PrivateSessionStorage.ResolveDirectory(Path.Combine(folder, "other-profile", "BepInEx", "config"), gameSaveDirectory), "Profiles have independent private sessions");
+    Check(Rejects(() => PrivateSessionStorage.ResolveDirectory(configDirectory, Path.Combine(folder, "profile", "data"))), "Data root inside profile rejected");
+    Check(Rejects(() => PrivateSessionStorage.ResolveDirectory(configDirectory, "relative-data")), "Relative private data root rejected");
+    var privateStorage = new PrivateSessionStorage(configDirectory, gameSaveDirectory);
+    Check(privateStorage.Load() == null && !Directory.Exists(privatePath), "First launch has no private session and creates no files");
+    string oldSessionPath = Path.Combine(configDirectory, "ContinueGame.last-session.json");
+    string oldKeys = Path.Combine(configDirectory, "ContinueGame.keys");
+    string oldCipher = new PortablePasswordProtection(oldKeys).Protect(testPassword);
+    new SessionStore(oldSessionPath).Save(PrivateRecord(oldCipher));
+    byte[] oldSessionBytes = File.ReadAllBytes(oldSessionPath);
+    byte[] oldKeyBytes = File.ReadAllBytes(Path.Combine(oldKeys, "password.key"));
+    Check(privateStorage.Load() == null && !Directory.Exists(privatePath), "Existing profile credentials are ignored without migration");
+    var normalRecord = PrivateRecord(null!);
+    privateStorage.Save(normalRecord, testPassword);
+    Check(privateStorage.PasswordProtection.Unprotect(privateStorage.Load().ProtectedPassword) == testPassword, "Normal join creates a working private saved login");
+    Check(!File.ReadAllText(Path.Combine(privatePath, "last-session.json")).Contains(testPassword), "Private session contains no plaintext password");
+    Check(File.ReadAllBytes(oldSessionPath).SequenceEqual(oldSessionBytes) && File.ReadAllBytes(Path.Combine(oldKeys, "password.key")).SequenceEqual(oldKeyBytes), "Saving and loading never change or delete old profile credentials");
+    File.WriteAllText(oldSessionPath, "invalid old data");
+    Check(privateStorage.PasswordProtection.Unprotect(privateStorage.Load().ProtectedPassword) == testPassword && File.ReadAllText(oldSessionPath) == "invalid old data", "Corrupt old config cannot affect private saved login");
+    privateStorage.Save(normalRecord, "");
+    Check(privateStorage.Load().ProtectedPassword == "", "Passwordless normal join updates private saved session");
+
     var loading = new LoadingState();
     Check(loading.Stage == LoadingStage.SelectingCharacter && !loading.Completed, "Loading begins before character selection");
     loading.Advance(LoadingStage.RestoringPassword);
@@ -165,6 +199,16 @@ try
         Check(HasMember("Hud", "UpdateBlackScreen") && HasMember("Hud", "m_loadingScreen", true)
             && HasMember("Hud", "m_loadingProgress", true) && HasMember("Hud", "m_loadingImage", true), "Native world-loading artwork visibility integration exists");
     }
+    using (var utilityStream = File.OpenRead(Path.Combine(Path.GetDirectoryName(gameAssembly)!, "assembly_utils.dll")))
+    using (var utilityPe = new PEReader(utilityStream))
+    {
+        MetadataReader utilityMetadata = utilityPe.GetMetadataReader();
+        Check(utilityMetadata.TypeDefinitions.Any(handle =>
+            utilityMetadata.GetString(utilityMetadata.GetTypeDefinition(handle).Name) == "Utils" &&
+            utilityMetadata.GetTypeDefinition(handle).GetMethods().Any(method =>
+                utilityMetadata.GetString(utilityMetadata.GetMethodDefinition(method).Name) == "GetSaveDataPath")),
+            "Installed Valheim exposes local save directory API");
+    }
     using (var pluginStream = File.OpenRead(Path.Combine(project, "bin/Release/ContinueGame.dll")))
     using (var pluginPe = new PEReader(pluginStream))
     {
@@ -173,6 +217,13 @@ try
             "Plugin has no System.ValueTuple dependency");
         Check(!metadata.AssemblyReferences.Any(handle => metadata.GetString(metadata.GetAssemblyReference(handle).Name).Contains("Jotunn", StringComparison.OrdinalIgnoreCase)),
             "Plugin has no Jotunn dependency");
+        var nativeModules = metadata.MethodDefinitions
+            .Where(handle => (metadata.GetMethodDefinition(handle).Attributes & System.Reflection.MethodAttributes.PinvokeImpl) != 0)
+            .Select(handle => metadata.GetString(metadata.GetModuleReference(metadata.GetMethodDefinition(handle).GetImport().Module).Name)).ToArray();
+        Check(!nativeModules.Contains("ContinueGame.Posix"), "No custom native library alias remains in plugin");
+        Check(nativeModules.All(name => new[] { "crypt32.dll", "kernel32.dll" }.Contains(name)), "Native imports are limited to Windows password protection");
+        Check(!metadata.MethodDefinitions.Where(handle => (metadata.GetMethodDefinition(handle).Attributes & System.Reflection.MethodAttributes.PinvokeImpl) != 0)
+            .Any(handle => metadata.GetString(metadata.GetMethodDefinition(handle).GetImport().Name) == "chmod"), "No chmod import remains in the compiled DLL");
     }
     Console.WriteLine($"Completed {checks} checks.");
 }

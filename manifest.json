@@ -1,6 +1,6 @@
 {
   "name": "ContinueGame",
-  "version_number": "1.0.0",
+  "version_number": "1.0.2",
   "website_url": "https://github.com/slikfoul/ContinueGame",
   "description": "Continue your last Valheim server session with one click. Automatically selects your saved character and reconnects using an encrypted saved password.",
   "dependencies": [

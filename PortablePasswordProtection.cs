@@ -1,7 +1,5 @@
 using System;
-using System.ComponentModel;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -26,7 +24,7 @@ namespace ContinueGame
         }
     }
 
-    // The local random key is protected by Unix account permissions, not by a desktop keyring.
+    // The local key uses Valheim's local save directory and normal OS permissions.
     // AES-CBC uses a fresh IV; a separate key authenticates the entire envelope before decryption.
     public sealed class PortablePasswordProtection
     {
@@ -34,19 +32,10 @@ namespace ContinueGame
         private readonly string _directory;
         private readonly string _keyPath;
 
-        [DllImport("ContinueGame.Posix", EntryPoint = "chmod", SetLastError = true, CharSet = CharSet.Ansi)]
-        private static extern int Chmod(string path, uint mode);
-
         public PortablePasswordProtection(string directory)
         {
             _directory = Path.GetFullPath(directory);
             _keyPath = Path.Combine(_directory, "password.key");
-        }
-
-        private static void Restrict(string path, uint mode)
-        {
-            if (Environment.OSVersion.Platform != PlatformID.Win32NT && Chmod(path, mode) != 0)
-                throw new Win32Exception(Marshal.GetLastWin32Error());
         }
 
         private byte[] ReadKey(bool create)
@@ -56,7 +45,6 @@ namespace ContinueGame
                 if (!create) throw new FileNotFoundException("Password key is missing.");
                 Directory.CreateDirectory(_directory);
             }
-            Restrict(_directory, 448); // 0700, owner only
             if (!File.Exists(_keyPath) && create)
             {
                 byte[] key = new byte[64];
@@ -67,8 +55,6 @@ namespace ContinueGame
                     using (var stream = new FileStream(_keyPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                     {
                         created = true;
-                        // Restrict the empty file before writing any secret bytes.
-                        Restrict(_keyPath, 384); // 0600, owner read/write
                         stream.Write(key, 0, key.Length);
                         stream.Flush(true);
                     }
@@ -83,7 +69,6 @@ namespace ContinueGame
                 finally { Array.Clear(key, 0, key.Length); }
             }
             if (!File.Exists(_keyPath)) throw new FileNotFoundException("Password key is missing.");
-            Restrict(_keyPath, 384);
             if (new FileInfo(_keyPath).Length != 64) throw new CryptographicException("Invalid password key.");
             return File.ReadAllBytes(_keyPath);
         }

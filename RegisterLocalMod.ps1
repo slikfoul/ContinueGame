@@ -53,12 +53,12 @@ New-Item -ItemType Directory -Path $backupDirectory | Out-Null
 $stagingDirectory = Join-Path $backupDirectory 'new-cache'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $stagingDirectory)
-$required = @('manifest.json','README.md','CHANGELOG.md','icon.png','BepInEx/plugins/ContinueGame/ContinueGame.dll','BepInEx/plugins/ContinueGame/ContinueGame.dll.config')
+$required = @('manifest.json','README.md','CHANGELOG.md','icon.png','BepInEx/plugins/ContinueGame/ContinueGame.dll')
 if (@(Get-ChildItem -LiteralPath $stagingDirectory -Recurse -File).Count -ne $required.Count) { throw 'The archive has unexpected contents.' }
 foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $relative))) { throw "Missing archive content: $relative" }
 }
-foreach ($fileName in @('ContinueGame.dll','ContinueGame.dll.config')) {
+foreach ($fileName in @('ContinueGame.dll')) {
     if ((Get-FileHash -LiteralPath (Join-Path $stagingDirectory ('BepInEx\plugins\ContinueGame\' + $fileName))).Hash -ne
         (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('bin\Release\' + $fileName))).Hash) {
         throw 'The archive and current build differ.'
@@ -154,7 +154,7 @@ try {
     # PowerShell can convert a null string argument to an empty path; use a real backup path.
     [IO.File]::Replace($tempRegistryPath, $registryPath, (Join-Path $backupDirectory 'atomic-registry-backup.yml'))
     $registryChanged = $true
-    foreach ($fileName in @('ContinueGame.dll','ContinueGame.dll.config')) {
+    foreach ($fileName in @('ContinueGame.dll')) {
         $installedFileName = if ($enabled) { $fileName } else { $fileName + '.old' }
         if ((Get-FileHash -LiteralPath (Join-Path $managedPluginDirectory $installedFileName)).Hash -ne
             (Get-FileHash -LiteralPath (Join-Path $cacheDirectory ('BepInEx\plugins\ContinueGame\' + $fileName))).Hash) {

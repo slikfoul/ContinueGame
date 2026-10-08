@@ -11,14 +11,14 @@ using UnityEngine.UI;
 
 namespace ContinueGame
 {
-    [BepInPlugin(PluginId, "ContinueGame", "1.0.0")]
+    [BepInPlugin(PluginId, "ContinueGame", "1.0.2")]
     public sealed class ContinueGamePlugin : BaseUnityPlugin
     {
         public const string PluginId = "Slikfoul.ContinueGame";
         internal static ContinueGamePlugin Instance;
         private static readonly FieldInfo PasswordField = AccessTools.Field(typeof(FejdStartup), "<ServerPassword>k__BackingField");
         private Harmony _harmony;
-        private SessionStore _store;
+        private PrivateSessionStorage _storage;
         private SessionRecord _saved;
         private SessionRecord _pending;
         private string _pendingPassword;
@@ -40,14 +40,28 @@ namespace ContinueGame
         private void Awake()
         {
             Instance = this;
-            _store = new SessionStore(Path.Combine(Paths.ConfigPath, "ContinueGame.last-session.json"));
-            _passwordProtection = new CrossPlatformPasswordProtection(Path.Combine(Paths.ConfigPath, "ContinueGame.keys"));
-            try { _saved = _store.Load(); }
-            catch (Exception) { Logger.LogWarning("Saved session could not be read. Join normally to save a new session."); }
             if (PasswordField == null) { Logger.LogError("Required Valheim password integration is unavailable."); return; }
             _harmony = new Harmony(PluginId);
             _harmony.PatchAll(typeof(ContinueGamePlugin).Assembly);
             Logger.LogInfo("ContinueGame loaded.");
+        }
+
+        private void InitializeStorage()
+        {
+            _saved = null;
+            _storage = null;
+            _passwordProtection = null;
+            try
+            {
+                // Resolve after the menu has initialized the game's save settings.
+                // Never select Auto/Cloud storage for credentials.
+                string localSavePath = Utils.GetSaveDataPath(FileHelpers.FileSource.Local);
+                if (string.IsNullOrWhiteSpace(localSavePath)) throw new IOException("Local save directory is unavailable.");
+                _storage = new PrivateSessionStorage(Paths.ConfigPath, Path.GetFullPath(localSavePath));
+                _passwordProtection = _storage.PasswordProtection;
+                _saved = _storage.Load();
+            }
+            catch (Exception) { Logger.LogWarning("Saved session could not be read. Join normally to save a new session."); }
         }
 
         private void OnDestroy()
@@ -132,8 +146,7 @@ namespace ContinueGame
                 if (profile == null) return;
                 _pending.CharacterFilename = profile.GetFilename();
                 _pending.CharacterId = profile.GetPlayerID();
-                _pending.ProtectedPassword = _passwordProtection.Protect(_pendingPassword ?? "");
-                _store.Save(_pending);
+                _storage.Save(_pending, _pendingPassword ?? "");
                 _saved = _pending;
                 Logger.LogInfo("Last successful server and character saved; password protected.");
             }
@@ -284,6 +297,7 @@ namespace ContinueGame
         internal void CreateButton(FejdStartup startup)
         {
             CancelPending();
+            InitializeStorage();
             _menu = startup;
             try
             {

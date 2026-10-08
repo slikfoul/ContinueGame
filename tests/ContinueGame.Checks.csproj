@@ -9,5 +9,6 @@
     <Compile Include="../PasswordProtection.cs" Link="PasswordProtection.cs" />
     <Compile Include="../PortablePasswordProtection.cs" Link="PortablePasswordProtection.cs" />
     <Compile Include="../LoadingState.cs" Link="LoadingState.cs" />
+    <Compile Include="../PrivateSessionStorage.cs" Link="PrivateSessionStorage.cs" />
   </ItemGroup>
 </Project>

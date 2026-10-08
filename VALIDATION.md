@@ -1,3 +1,13 @@
+# Storage fix 1.0.2
+
+- Saved sessions and portable encryption keys use ContinueGame/<profile-id> under the local Valheim save directory, outside the mod profile. The path comes from Utils.GetSaveDataPath(FileSource.Local), resolved after menu initialization.
+- Only the local ContinueGame store is read and written. Old profile credentials are not loaded, migrated, modified or deleted. A normal successful login initializes the private store.
+- No ContinueGame.Posix alias, Unix native library import, chmod call or assembly dllmap configuration remains. Only Windows DPAPI native imports remain. Unix data files use normal OS permissions; owner-only mode is not enforced or claimed.
+- Release DLL builds successfully. 82 automated checks passed on Windows, including first-run behavior, ignoring old profile credentials, preserving old files byte-for-byte and native-import metadata.
+- Package validation passed: five files, matching manifest/plugin/assembly versions, public changelog, 256x256 PNG, player-only README and content hashes.
+- Linux/macOS runtime has not been tested. The updated mod still requires in-game verification.
+- The user uploaded version 1.0.2 to Thunderstore. The downloaded archive matches the local release ZIP byte-for-byte (SHA-256: FFE6DF0B26CAD91AD2373B212C48364D3E1B6BA7B5974E4FEA7A29E360E73CF2).
+
 # Проверки релиза 1.0.0
 
 ## Причина и подтверждение
