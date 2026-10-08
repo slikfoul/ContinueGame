@@ -45,6 +45,4 @@ For another existing profile, pass `-Profile 'ProfileName'`. To build only the a
 
 You can override the Valheim and BepInEx profile paths using the MSBuild properties `ValheimDir` and `ModProfile`. Game assemblies are used only for compilation and are not included in the package. Decompiled research files under `research` are excluded from both compilation and distribution.
 
-The Thunderstore archive contains `manifest.json`, `README.md`, `CHANGELOG.md` and `icon.png` (256 x 256) at its root, plus both mod files under `BepInEx/plugins/ContinueGame/`. It also supports manual installation. The script validates the package but does not publish it. When uploading to Thunderstore, select the **AI Generated** category.
-
 Author: Slikfoul.
