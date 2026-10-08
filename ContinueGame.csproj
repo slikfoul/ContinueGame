@@ -4,7 +4,7 @@
     <AssemblyName>ContinueGame</AssemblyName>
     <RootNamespace>ContinueGame</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>0.2.0</Version>
+    <Version>0.2.2</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ImplicitlyExpandNETStandardFacades>false</ImplicitlyExpandNETStandardFacades>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>

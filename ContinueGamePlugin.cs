@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ContinueGame
 {
-    [BepInPlugin(PluginId, "ContinueGame", "0.2.0")]
+    [BepInPlugin(PluginId, "ContinueGame", "0.2.2")]
     public sealed class ContinueGamePlugin : BaseUnityPlugin
     {
         public const string PluginId = "Slikfoul.ContinueGame";
@@ -57,10 +57,10 @@ namespace ContinueGame
             if (Instance == this) Instance = null;
         }
 
-        internal void CancelPending(bool completed = false)
+        internal void CancelPending()
         {
-            if (completed) _loadingScreen?.Complete();
-            else { _loadingScreen?.Dispose(); _loadingScreen = null; }
+            _loadingScreen?.Dispose();
+            _loadingScreen = null;
             RestorePassword();
             _pending = null;
             _pendingPassword = null;
@@ -83,7 +83,11 @@ namespace ContinueGame
                 try
                 {
                     _loadingScreen.Tick();
-                    if (_loadingScreen.IsFinished) _loadingScreen = null;
+                    if (_loadingScreen.IsFinished)
+                    {
+                        Logger.LogInfo("Native loading artwork is ready; Continue preloading panel hidden.");
+                        _loadingScreen = null;
+                    }
                 }
                 catch (Exception)
                 {
@@ -134,7 +138,7 @@ namespace ContinueGame
                 Logger.LogInfo("Last successful server and character saved; password protected.");
             }
             catch (Exception) { Logger.LogWarning("The successful session could not be saved. The previous session was kept."); }
-            finally { CancelPending(completed: true); }
+            finally { CancelPending(); }
         }
 
         internal void CaptureJoin(FejdStartup startup)
@@ -273,7 +277,7 @@ namespace ContinueGame
             {
                 _loadingScreen.Dispose();
                 _loadingScreen = null;
-                Logger.LogWarning("Connection-stage captions could not be created; native loading will continue normally.");
+                Logger.LogWarning("Preloading UI could not be hidden; connection will continue normally.");
             }
         }
 
@@ -397,22 +401,6 @@ namespace ContinueGame
             {
                 if (!__instance.IsServer()) Instance?._loadingScreen?.Advance(LoadingStage.ReceivingWorld);
             }
-        }
-
-        [HarmonyPatch(typeof(Game), "SpawnPlayer")]
-        private static class CharacterSpawnPatch
-        {
-            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.PreparingCharacter); }
-            private static void Postfix(Player __result)
-            {
-                if (__result != null) Instance?._loadingScreen?.Advance(LoadingStage.Ready);
-            }
-        }
-
-        [HarmonyPatch(typeof(Game), "FindSpawnPoint")]
-        private static class SpawnAreaPatch
-        {
-            private static void Prefix() { Instance?._loadingScreen?.Advance(LoadingStage.LoadingArea); }
         }
 
         [HarmonyPatch(typeof(Hud), "UpdateBlackScreen")]

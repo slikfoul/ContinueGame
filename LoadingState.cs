@@ -1,26 +1,19 @@
-using System.Collections.Generic;
-
 namespace ContinueGame
 {
     public enum LoadingStage
     {
         SelectingCharacter, RestoringPassword, FindingServer, LoadingScene, Connecting,
-        SendingPassword, Authenticating, ReceivingWorld, LoadingArea, PreparingCharacter, Ready
+        SendingPassword, Authenticating, ReceivingWorld, LoadingArea
     }
 
     public sealed class LoadingState
     {
-        private readonly List<LoadingStage> _visited = new List<LoadingStage> { LoadingStage.SelectingCharacter };
-        public LoadingState() { Visited = _visited.AsReadOnly(); }
-        public IReadOnlyList<LoadingStage> Visited { get; }
         public LoadingStage Stage { get; private set; }
         public bool Completed { get; private set; }
-        public void Advance(LoadingStage stage)
+        public void Advance(LoadingStage stage) { if (!Completed && stage > Stage) Stage = stage; }
+        public void ObserveNativeLoading(bool active, float alpha, bool worldLoadingActive, bool artworkVisible)
         {
-            if (Completed || stage <= Stage) return;
-            Stage = stage;
-            _visited.Add(stage);
+            if (active && alpha > 0f && worldLoadingActive && artworkVisible) Completed = true;
         }
-        public void Complete() { Advance(LoadingStage.Ready); Completed = true; }
     }
 }
