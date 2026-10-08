@@ -1,6 +1,6 @@
 # ContinueGame
 
-A client-side Valheim mod that adds a **Continue** button to the main menu. The button follows the game's selected language, with English and Russian labels.
+A client-side Valheim mod that adds a **Continue** button to the main menu.
 
 After your first successful normal connection, the mod remembers the server, character and password. The next time you press Continue, it selects that character and connects to the same server using the saved password. The saved session is updated only after a successful connection and the character appears in the world. A failed attempt does not replace your last successful session.
 
