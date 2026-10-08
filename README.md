@@ -1,32 +1,35 @@
 # ContinueGame
 
-A client-side Valheim mod that adds a **Continue** button to the main menu.
+Continue your last Valheim server session with one click from the main menu.
 
-After your first successful normal connection, the mod remembers the server, character and password. The next time you press Continue, it selects that character and connects to the same server using the saved password. The saved session is updated only after a successful connection and the character appears in the world. A failed attempt does not replace your last successful session.
+## Features
 
-Throughout the dark wait before Valheim's loading artwork appears, the mod shows **Loading**, a single current-stage label immediately above a continuous gold bar, and a smooth moving glow. The label follows actual operations: selecting the character, restoring the saved password, finding the server, loading the game scene, connecting, submitting the password when required, authenticating and receiving world data. Fast operations can change the label immediately; the connection is never delayed to keep a stage on screen. The bar indicates activity rather than a completion percentage.
+- Adds a **Continue** button that selects your saved character and reconnects to your last server.
+- Remembers the server, character and encrypted password after a successful connection.
+- Shows **Loading**, the current connection stage and an animated gold bar while waiting for Valheim's loading screen.
+- Supports dedicated server addresses, Steam connections and crossplay servers through PlayFab.
 
 ## Installation
 
-The only required dependency is **BepInEx 5**, configured for your Valheim version and operating system. The mod does not need to be installed on the server. Password storage is implemented for Windows, Linux and macOS; runtime use on Linux and macOS has not yet been verified. Those systems require a working BepInEx setup for the corresponding game build; a Windows loader package alone does not provide that setup.
+Requires **BepInEx 5** configured for your Valheim installation. Install the mod on your game client. Runtime compatibility on Linux and macOS has not yet been verified.
 
 1. Close Valheim.
-2. Copy the archive's `BepInEx` folder into the game directory or mod manager profile that already contains your `BepInEx` folder. Keep **both** `ContinueGame.dll` and `ContinueGame.dll.config` in `BepInEx/plugins/ContinueGame/`. The configuration file is required on Linux and macOS to load the system library used for file permissions. Remove any older copy of ContinueGame installed in a different folder.
-3. Launch the game and connect normally once: select a character and enter the server password. Continue is disabled until the first successful session has been saved.
-4. Return to the main menu or restart the game, then press Continue.
+2. Copy the archive's `BepInEx` folder into your game directory or existing mod manager profile. Keep both `ContinueGame.dll` and `ContinueGame.dll.config` together in `BepInEx/plugins/ContinueGame/`.
+3. Launch Valheim.
 
-If the saved character no longer exists or the password cannot be decrypted, the mod displays a message and leaves normal joining available. Unavailable servers and changed passwords use Valheim's native connection errors. Join normally with the new password to update the saved session.
+## How to use
+
+Connect to a server normally once, selecting your character and entering the password if required. After a successful connection, return to the main menu or restart the game and press **Continue**.
+
+The button becomes available once a session has been saved. Each successful connection updates the saved session; failed attempts keep the previous one. If the server password changes, connect normally with the new password to save it.
 
 ## Saved data
 
-`BepInEx/config/ContinueGame.last-session.json` stores the last successful session. The mod does not write the password to its log.
+The last session is stored in `BepInEx/config/ContinueGame.last-session.json`.
 
-- **Windows:** the password is protected with Windows DPAPI and tied to your current Windows account. Saved sessions from earlier development builds remain compatible. Moving to another account or operating system requires a new normal connection.
-- **Linux and macOS:** the password is encrypted with AES-256, and HMAC-SHA256 verifies integrity before decryption. A random key is stored separately in `BepInEx/config/ContinueGame.keys/password.key`. Directory permissions are set to `0700`, and file permissions to `0600`. Protection relies on local account permissions rather than an operating system credential vault: anyone who obtains both the session file and the key can decrypt the password. Both files are needed for migration; joining normally again is simpler. A missing or damaged key causes automatic joining to display a warning.
+Passwords are encrypted on Windows, Linux and macOS. On Windows, protection is tied to your Windows account. On Linux and macOS, the encryption key is stored separately in `BepInEx/config/ContinueGame.keys/password.key` with access restricted to your account. Keep the session file and key private: together they allow the password to be decrypted.
 
-To forget the saved session, close the game and delete the session file. On Linux and macOS, you can also delete the `ContinueGame.keys` directory. The mod does not change your other character or world saves.
-
-Dedicated server addresses, Steam connections and crossplay servers through PlayFab are supported. Automatic joining uses Valheim's native compatibility and access checks.
+To forget the saved session, close Valheim and delete the session file. On Linux and macOS, you can also delete the `ContinueGame.keys` directory. After moving to another account or operating system, connect normally to save a new session.
 
 ## Building from source
 
