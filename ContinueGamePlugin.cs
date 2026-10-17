@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ContinueGame
 {
-    [BepInPlugin(PluginId, "ContinueGame", "1.0.2")]
+    [BepInPlugin(PluginId, "ContinueGame", "1.0.3")]
     public sealed class ContinueGamePlugin : BaseUnityPlugin
     {
         public const string PluginId = "Slikfoul.ContinueGame";
@@ -130,16 +130,28 @@ namespace ContinueGame
                     CancelPending();
                 }
             }
-            if (_pending == null || ZNet.instance == null || ZNet.instance.IsServer()) return;
-            ZNet.ConnectionStatus status = ZNet.GetConnectionStatus();
-            if (status > ZNet.ConnectionStatus.Connected)
+            if (_pending == null || ZNet.instance == null) return;
+            if (_pending.IsLocalWorld)
             {
-                Logger.LogInfo("Connection did not succeed; keeping the last successful session.");
-                CancelPending();
-                return;
+                // A solo game is a local ZNet server, not a connected remote client.
+                World world = ZNet.GetWorldIfIsHost();
+                if (!ZNet.instance.IsServer() || world == null || !_pending.MatchesWorld(world.m_worldName, world.m_uid)) return;
+                _loadingScreen?.Advance(LoadingStage.LoadingArea);
             }
-            if (status == ZNet.ConnectionStatus.Connected) _loadingScreen?.Advance(LoadingStage.LoadingArea);
-            if (status != ZNet.ConnectionStatus.Connected || Game.instance == null || Player.m_localPlayer == null) return;
+            else
+            {
+                if (ZNet.instance.IsServer()) return;
+                ZNet.ConnectionStatus status = ZNet.GetConnectionStatus();
+                if (status > ZNet.ConnectionStatus.Connected)
+                {
+                    Logger.LogInfo("Connection did not succeed; keeping the last successful session.");
+                    CancelPending();
+                    return;
+                }
+                if (status == ZNet.ConnectionStatus.Connected) _loadingScreen?.Advance(LoadingStage.LoadingArea);
+                if (status != ZNet.ConnectionStatus.Connected) return;
+            }
+            if (Game.instance == null || Player.m_localPlayer == null) return;
             try
             {
                 PlayerProfile profile = Game.instance.GetPlayerProfile();
@@ -148,10 +160,21 @@ namespace ContinueGame
                 _pending.CharacterId = profile.GetPlayerID();
                 _storage.Save(_pending, _pendingPassword ?? "");
                 _saved = _pending;
-                Logger.LogInfo("Last successful server and character saved; password protected.");
+                Logger.LogInfo("Last successful session and character saved.");
             }
             catch (Exception) { Logger.LogWarning("The successful session could not be saved. The previous session was kept."); }
             finally { CancelPending(); }
+        }
+
+        internal void CaptureLocalWorld(bool server, bool openServer, World world)
+        {
+            // Hosting a multiplayer server is left to the ordinary menu. Never open a solo world to the network.
+            if (!server || openServer || world == null || world.m_menu || _menu == null) return;
+            if (world.m_dataError != World.SaveDataError.None || world.m_uid == 0 || string.IsNullOrWhiteSpace(world.m_worldName)) return;
+            RestorePassword();
+            _pending = new SessionRecord { ServerKind = "LocalWorld", WorldName = world.m_worldName, WorldId = world.m_uid };
+            _pendingPassword = "";
+            Logger.LogInfo("Tracking a single-player world start.");
         }
 
         internal void CaptureJoin(FejdStartup startup)
@@ -218,9 +241,12 @@ namespace ContinueGame
             try
             {
                 _busy = true;
-                BeginLoading(_menu);
+                // Local starts can show native save warnings before they accept the launch.
+                // Only show their overlay once TransitionToMainScene actually begins.
+                if (!_saved.IsLocalWorld) BeginLoading(_menu);
                 PlayerProfile selected = null;
-                foreach (PlayerProfile profile in SaveSystem.GetAllPlayerProfiles())
+                var profiles = SaveSystem.GetAllPlayerProfiles();
+                foreach (PlayerProfile profile in profiles)
                 {
                     if (profile.GetFilename() == _saved.CharacterFilename && profile.GetPlayerID() == _saved.CharacterId)
                     { selected = profile; break; }
@@ -234,6 +260,11 @@ namespace ContinueGame
                 }
                 AccessTools.Method(typeof(FejdStartup), "SelectCharacter").Invoke(_menu,
                     new object[] { selected.GetFilename(), selected.m_fileSource });
+                if (_saved.IsLocalWorld)
+                {
+                    ContinueLocalWorld(profiles, selected);
+                    return;
+                }
                 _loadingScreen?.Advance(LoadingStage.RestoringPassword);
                 string password;
                 try { password = _passwordProtection.Unprotect(_saved.ProtectedPassword); }
@@ -265,6 +296,33 @@ namespace ContinueGame
             }
         }
 
+        private void ContinueLocalWorld(System.Collections.Generic.List<PlayerProfile> profiles, PlayerProfile selected)
+        {
+            World world = null;
+            foreach (World candidate in SaveSystem.GetWorldList())
+            {
+                if (!_saved.MatchesWorld(candidate.m_worldName, candidate.m_uid)) continue;
+                if (world != null) throw new InvalidDataException("The saved world identity is ambiguous.");
+                world = candidate;
+            }
+            if (world == null || world.m_dataError != World.SaveDataError.None)
+            {
+                CancelPending();
+                Warning("The saved world is missing or unavailable. Start a world normally to save a new session.");
+                return;
+            }
+            // OnWorldStart uses the selected profile for the native cloud-capacity checks.
+            AccessTools.Field(typeof(FejdStartup), "m_profiles").SetValue(_menu, profiles);
+            AccessTools.Field(typeof(FejdStartup), "m_profileIndex").SetValue(_menu, profiles.IndexOf(selected));
+            AccessTools.Field(typeof(FejdStartup), "m_world").SetValue(_menu, world);
+            _menu.m_openServerToggle.SetIsOnWithoutNotify(false);
+            _menu.m_publicServerToggle.SetIsOnWithoutNotify(false);
+            _menu.m_crossplayServerToggle.SetIsOnWithoutNotify(false);
+            _menu.m_serverPassword.text = "";
+            _menu.OnWorldStart();
+            if (!_menu.IsInvoking("LoadMainSceneIfBackendSelected")) CancelPending();
+        }
+
         private void Warning(string message)
         {
             UnifiedPopup.Push(new WarningPopup(Text("Продолжить", "Continue"), message,
@@ -277,6 +335,7 @@ namespace ContinueGame
             try
             {
                 _loadingScreen = new ContinueLoadingScreen(startup);
+                if (_pending != null && _pending.IsLocalWorld) _loadingScreen.Advance(LoadingStage.SelectingWorld);
                 Logger.LogInfo("Continue loading screen shown.");
             }
             catch (Exception) { Logger.LogWarning("Loading visuals could not be created; connection will continue normally."); }
@@ -367,6 +426,16 @@ namespace ContinueGame
         private static class OrdinaryJoinPatch
         {
             private static void Prefix() { Instance?.CancelPending(); }
+        }
+
+        [HarmonyPatch(typeof(ZNet), nameof(ZNet.SetServer))]
+        private static class LocalWorldStartPatch
+        {
+            private static void Prefix(bool server, bool openServer, World world)
+            {
+                try { Instance?.CaptureLocalWorld(server, openServer, world); }
+                catch (Exception) { Instance?.CancelPending(); Instance?.Logger.LogWarning("Could not track the local world; ordinary starting remains available."); }
+            }
         }
 
         [HarmonyPatch(typeof(ZNet), "SendPeerInfo")]

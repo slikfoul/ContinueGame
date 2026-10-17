@@ -1,16 +1,17 @@
-param([string]$Profile = 'Default')
+param([string]$Profile = 'Default', [string]$DataRoot = (Join-Path $env:APPDATA 'r2modmanPlus-local\Valheim'))
 $ErrorActionPreference = 'Stop'
 if ($Profile -notmatch '^[A-Za-z0-9 _-]+$') { throw 'Invalid profile name.' }
 function AssertClosed {
-    # Overwolf may keep running in the tray after the Thunderstore app is closed.
-    $blockingProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(valheim|Thunderstore.*)$' })
+    # Overwolf may keep running in the tray after r2modman and the Thunderstore app are closed.
+    $blockingProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(valheim|r2modman.*|Thunderstore.*)$' })
     if ($blockingProcesses.Count) {
         $names = ($blockingProcesses.ProcessName | Sort-Object -Unique) -join ', '
-        throw ('Close Valheim and Thunderstore before updating the registered local mod. Still running: ' + $names)
+        throw ('Close Valheim and r2modman (and Thunderstore Mod Manager if running) before updating the registered local mod. Still running: ' + $names)
     }
 }
 AssertClosed
-$dataRoot = Join-Path $env:APPDATA 'Thunderstore Mod Manager\DataFolder\Valheim'
+if (-not [IO.Path]::IsPathRooted($DataRoot)) { throw 'DataRoot must be an absolute Valheim manager data directory.' }
+$dataRoot = [IO.Path]::GetFullPath($DataRoot)
 $profileRoot = Join-Path $dataRoot ('profiles\' + $Profile)
 $registryPath = Join-Path $profileRoot 'mods.yml'
 if (-not (Test-Path -LiteralPath $registryPath)) { throw 'The existing profile registry was not found.' }
@@ -20,8 +21,17 @@ $blocks = [regex]::Matches($registryText, '(?ms)^- manifestVersion:.*?(?=^- mani
 $existing = @($blocks | Where-Object { $_.Value -match '(?m)^  name: Slikfoul-ContinueGame\r?$' })
 if ($existing.Count -gt 1) { throw 'Duplicate ContinueGame entries exist; leave the registry untouched.' }
 $enabled = $existing.Count -eq 0 -or $existing[0].Value -notmatch '(?m)^  enabled: false\r?$'
+$trusted = $existing.Count -eq 1 -and $existing[0].Value -match '(?m)^  trustedPackage: true\r?$'
 $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
 $version = $manifest.version_number
+if ($existing.Count) {
+    $installed = [regex]::Match($existing[0].Value, '(?m)^  versionNumber:\r?\n    major: (\d+)\r?\n    minor: (\d+)\r?\n    patch: (\d+)')
+    if (-not $installed.Success) { throw 'Cannot determine installed version; leave the profile untouched.' }
+    $installedVersion = [version]('{0}.{1}.{2}' -f $installed.Groups[1].Value,$installed.Groups[2].Value,$installed.Groups[3].Value)
+    if ($installedVersion -gt [version]$version) { throw 'Refusing to downgrade a newer local version.' }
+}
+# Keep manager package links separate from the archive project website.
+$managerWebsite = 'https://thunderstore.io/c/valheim/p/Slikfoul/' + $manifest.name + '/'
 $archivePath = Join-Path $PSScriptRoot "dist\Slikfoul-ContinueGame-$version.zip"
 if (-not (Test-Path -LiteralPath $archivePath)) { throw 'Build the Thunderstore package first.' }
 $pluginsRoot = [IO.Path]::GetFullPath((Join-Path $profileRoot 'BepInEx\plugins'))
@@ -30,6 +40,15 @@ $managerDirectory = [IO.Path]::GetFullPath((Join-Path $pluginsRoot 'Slikfoul-Con
 $managedPluginDirectory = [IO.Path]::GetFullPath((Join-Path $managerDirectory 'ContinueGame'))
 $cacheRoot = [IO.Path]::GetFullPath((Join-Path $dataRoot 'cache\Slikfoul-ContinueGame'))
 $cacheDirectory = [IO.Path]::GetFullPath((Join-Path $cacheRoot $version))
+$cacheTrusted = $trusted
+$cacheMetadataPath = Join-Path $cacheDirectory 'mm_v2_manifest.json'
+if (Test-Path -LiteralPath $cacheMetadataPath) {
+    $cacheMetadata = Get-Content -LiteralPath $cacheMetadataPath -Raw | ConvertFrom-Json
+    if ($cacheMetadata.PSObject.Properties['trustedPackage']) {
+        if ($cacheMetadata.trustedPackage -isnot [bool]) { throw 'Invalid existing cache trust state; leave it untouched.' }
+        $cacheTrusted = $cacheMetadata.trustedPackage
+    }
+}
 foreach ($target in @($manualDirectory, $managerDirectory, $managedPluginDirectory)) {
     if (-not $target.StartsWith($pluginsRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Resolved plugin path escaped the intended profile.'
@@ -70,7 +89,7 @@ $managerManifest = [ordered]@{
     manifestVersion = 1
     name = 'Slikfoul-ContinueGame'
     authorName = 'Slikfoul'
-    websiteUrl = ''
+    websiteUrl = $managerWebsite
     displayName = 'ContinueGame'
     description = $manifest.description
     gameVersion = '0'
@@ -85,17 +104,18 @@ $managerManifest = [ordered]@{
     versionNumber = @{ major = [int]$parts[0]; minor = [int]$parts[1]; patch = [int]$parts[2] }
     enabled = $enabled
     icon = Join-Path $cacheDirectory 'icon.png'
-    onlineSource = $false
-    trustedPackage = $false
+    onlineSource = $true
+    trustedPackage = $cacheTrusted
 }
 [IO.File]::WriteAllText((Join-Path $stagingDirectory 'mm_v2_manifest.json'), ($managerManifest | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding $false))
 $description = $manifest.description.Replace("'", "''")
 $enabledYaml = $enabled.ToString().ToLowerInvariant()
+$trustedYaml = $trusted.ToString().ToLowerInvariant()
 $entry = @"
 - manifestVersion: 1
   name: Slikfoul-ContinueGame
   authorName: Slikfoul
-  websiteUrl: ''
+  websiteUrl: '$managerWebsite'
   displayName: ContinueGame
   description: '$description'
   gameVersion: '0'
@@ -113,8 +133,8 @@ $entry = @"
     minor: $($parts[1])
     patch: $($parts[2])
   enabled: $enabledYaml
-  onlineSource: false
-  trustedPackage: false
+  onlineSource: true
+  trustedPackage: $trustedYaml
 "@
 if ($existing.Count) {
     $match = $existing[0]

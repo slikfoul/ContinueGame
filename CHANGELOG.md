@@ -1,3 +1,7 @@
+# 1.0.3
+
+- Continue your last single-player world with the saved character from the main menu.
+
 # 1.0.2
 
 - Fixed saved-session storage to keep passwords and encryption keys in a separate directory under local Valheim saves, outside shared mod profiles.

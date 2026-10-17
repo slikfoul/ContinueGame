@@ -10,11 +10,11 @@ namespace ContinueGame
     {
         private static readonly Color Gold = new Color(0.92f, 0.76f, 0.44f, 1f);
         private static readonly string[] RussianStages = {
-            "Выбор персонажа", "Восстановление пароля", "Поиск сервера", "Загрузка игровой сцены",
+            "Выбор персонажа", "Загрузка мира", "Восстановление пароля", "Поиск сервера", "Загрузка игровой сцены",
             "Подключение к серверу", "Передача пароля", "Проверка входа", "Получение данных мира", "Загрузка области мира"
         };
         private static readonly string[] EnglishStages = {
-            "Selecting character", "Restoring password", "Finding server", "Loading game scene",
+            "Selecting character", "Loading world", "Restoring password", "Finding server", "Loading game scene",
             "Connecting to server", "Sending password", "Authenticating", "Receiving world data", "Loading world area"
         };
         private readonly LoadingState _state = new LoadingState();

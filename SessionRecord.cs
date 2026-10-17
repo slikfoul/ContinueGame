@@ -16,12 +16,23 @@ namespace ContinueGame
         [DataMember] public string CharacterFilename;
         [DataMember] public long CharacterId;
         [DataMember] public string ProtectedPassword;
+        [DataMember(EmitDefaultValue = false)] public string WorldName;
+        [DataMember(EmitDefaultValue = false)] public long WorldId;
+
+        public bool IsLocalWorld => ServerKind == "LocalWorld";
+
+        public bool MatchesWorld(string name, long id)
+        {
+            return IsLocalWorld && WorldId != 0 && WorldId == id &&
+                string.Equals(WorldName, name, StringComparison.Ordinal);
+        }
 
         public bool IsValid()
         {
-            if (Version != 1 || string.IsNullOrWhiteSpace(CharacterFilename) ||
-                string.IsNullOrWhiteSpace(Address) || ProtectedPassword == null)
+            if (Version != 1 || string.IsNullOrWhiteSpace(CharacterFilename) || ProtectedPassword == null)
                 return false;
+            if (IsLocalWorld) return !string.IsNullOrWhiteSpace(WorldName) && WorldId != 0 && ProtectedPassword.Length == 0;
+            if (string.IsNullOrWhiteSpace(Address)) return false;
             if (ServerKind == "Dedicated") return Port > 0 && Port <= ushort.MaxValue;
             if (ServerKind == "PlayFab") return true;
             ulong id;

@@ -2,7 +2,7 @@ namespace ContinueGame
 {
     public enum LoadingStage
     {
-        SelectingCharacter, RestoringPassword, FindingServer, LoadingScene, Connecting,
+        SelectingCharacter, SelectingWorld, RestoringPassword, FindingServer, LoadingScene, Connecting,
         SendingPassword, Authenticating, ReceivingWorld, LoadingArea
     }
 

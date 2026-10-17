@@ -20,16 +20,19 @@ string folder = Path.Combine(project, "tests", "scratch-" + Guid.NewGuid().ToStr
 Directory.CreateDirectory(folder);
 try
 {
+    bool windows = OperatingSystem.IsWindows();
+    var platformProtection = new CrossPlatformPasswordProtection(Path.Combine(folder, "platform-keys"));
     string testPassword = "Synthetic-check-" + Guid.NewGuid().ToString("N") + "-пароль";
-    string encrypted = PasswordProtection.Protect(testPassword);
+    string encrypted = platformProtection.Protect(testPassword);
     Check(encrypted != testPassword && encrypted.Length > 0, "Password encrypted");
-    Check(PasswordProtection.Unprotect(encrypted) == testPassword, "Windows DPAPI Unicode round trip");
-    Check(PasswordProtection.Protect(testPassword) != encrypted, "Encryption uses fresh randomness");
-    byte[] modified = Convert.FromBase64String(encrypted);
+    Check(platformProtection.Unprotect(encrypted) == testPassword, windows ? "Windows DPAPI Unicode round trip" : "Linux platform AES/HMAC Unicode round trip");
+    Check(platformProtection.Protect(testPassword) != encrypted, "Encryption uses fresh randomness");
+    string envelopePrefix = windows ? "" : PortablePasswordProtection.Prefix;
+    byte[] modified = Convert.FromBase64String(encrypted.Substring(envelopePrefix.Length));
     modified[modified.Length - 1] ^= 0x40;
-    Check(Rejects(() => PasswordProtection.Unprotect(Convert.ToBase64String(modified))), "Tampered password rejected");
-    Check(Rejects(() => PasswordProtection.Unprotect("not-base64")), "Malformed ciphertext rejected");
-    Check(PasswordProtection.Unprotect(PasswordProtection.Protect("")) == "", "Passwordless server supported");
+    Check(Rejects(() => platformProtection.Unprotect(envelopePrefix + Convert.ToBase64String(modified))), "Tampered password rejected");
+    Check(Rejects(() => platformProtection.Unprotect(envelopePrefix + "not-base64")), "Malformed ciphertext rejected");
+    Check(platformProtection.Unprotect(platformProtection.Protect("")) == "", "Passwordless server supported");
 
     string keyDirectory = Path.Combine(folder, "keys");
     var portable = new PortablePasswordProtection(keyDirectory);
@@ -55,9 +58,12 @@ try
     wrongKey.Protect("create an unrelated key");
     Check(Rejects(() => wrongKey.Unprotect(portableEncrypted)), "Unrelated key rejected by authentication");
     var compatibility = new CrossPlatformPasswordProtection(keyDirectory);
-    Check(compatibility.Unprotect(encrypted) == testPassword, "Legacy Windows passwords remain compatible");
-    Check(compatibility.Unprotect(portableEncrypted) == testPassword, "Portable password format selected on Windows too");
-    Check(PasswordProtection.Unprotect(compatibility.Protect(testPassword)) == testPassword, "Windows still uses DPAPI by default");
+    Check((windows ? compatibility.Unprotect(encrypted) : platformProtection.Unprotect(encrypted)) == testPassword,
+        windows ? "Legacy Windows passwords remain compatible" : "Linux platform password survives provider use");
+    Check(compatibility.Unprotect(portableEncrypted) == testPassword, "Portable password format selected by prefix");
+    Check(windows ? PasswordProtection.Unprotect(compatibility.Protect(testPassword)) == testPassword :
+        compatibility.Protect(testPassword).StartsWith(PortablePasswordProtection.Prefix),
+        windows ? "Windows still uses DPAPI by default" : "Linux uses portable encryption by default");
     var portableStore = new SessionStore(Path.Combine(folder, "portable-session.json"));
     portableStore.Save(new SessionRecord
     {
@@ -141,7 +147,7 @@ try
     var loaded = store.Load();
     Check(loaded.CharacterId == record.CharacterId && loaded.Port == 2456 && loaded.ServerOwner == record.ServerOwner,
         "Server, character and owner persist");
-    Check(PasswordProtection.Unprotect(loaded.ProtectedPassword) == testPassword, "Password survives save and reload");
+    Check(platformProtection.Unprotect(loaded.ProtectedPassword) == testPassword, "Password survives save and reload");
     Check(!File.ReadAllText(path).Contains(testPassword), "Saved file contains no plaintext password");
     byte[] previous = File.ReadAllBytes(path);
     record.Port = 0;
@@ -164,7 +170,49 @@ try
     record.Address = "synthetic-playfab-id";
     Check(record.IsValid(), "Crossplay server record supported");
 
-    string gameAssembly = @"G:\Games\SteamLibrary\steamapps\common\Valheim\valheim_Data\Managed\assembly_valheim.dll";
+    var solo = new SessionRecord
+    {
+        ServerKind = "LocalWorld", WorldName = "Synthetic solo world", WorldId = 123456789,
+        CharacterFilename = "solo_character", CharacterId = 98765, ProtectedPassword = ""
+    };
+    Check(solo.IsValid() && solo.Address == null, "Single-player session needs a world identity, not a server address");
+    Check(solo.MatchesWorld("Synthetic solo world", 123456789), "Saved local world found by name and UID");
+    Check(!solo.MatchesWorld("Synthetic solo world", 11111), "A different world with the same name is never resumed");
+    Check(!solo.MatchesWorld("Another world", 123456789), "A renamed world requires selecting it normally again");
+    Check(!record.MatchesWorld("Synthetic solo world", 123456789), "Remote sessions never select a local world");
+    string soloData = Path.Combine(folder, "solo-game-data");
+    var soloStorage = new PrivateSessionStorage(configDirectory, soloData);
+    soloStorage.Save(solo, "");
+    var reloadedSolo = new PrivateSessionStorage(configDirectory, soloData).Load();
+    Check(reloadedSolo.IsLocalWorld && reloadedSolo.CharacterId == solo.CharacterId &&
+        reloadedSolo.MatchesWorld(solo.WorldName, solo.WorldId), "Single-player world and character survive restart");
+    Check(reloadedSolo.ProtectedPassword == "" && !Directory.Exists(Path.Combine(soloStorage.DirectoryPath, "keys")),
+        "Single-player save creates a session file without a password key");
+    byte[] goodSoloBytes = File.ReadAllBytes(Path.Combine(soloStorage.DirectoryPath, "last-session.json"));
+    solo.WorldId = 0;
+    Check(Rejects(() => soloStorage.Save(solo, "")), "Local world without UID cannot replace the previous session");
+    Check(goodSoloBytes.SequenceEqual(File.ReadAllBytes(Path.Combine(soloStorage.DirectoryPath, "last-session.json"))),
+        "Rejected local update leaves the last successful session intact");
+    solo.WorldId = 123456789;
+    solo.WorldName = " ";
+    Check(!solo.IsValid(), "Local world without a name is rejected");
+    solo.WorldName = "Synthetic solo world";
+    solo.ProtectedPassword = encrypted;
+    Check(!solo.IsValid(), "Single-player records cannot carry server credentials");
+    solo.ProtectedPassword = "";
+    var serverAfterSolo = PrivateRecord(null!);
+    soloStorage.Save(serverAfterSolo, testPassword);
+    Check(!soloStorage.Load().IsLocalWorld && soloStorage.PasswordProtection.Unprotect(soloStorage.Load().ProtectedPassword) == testPassword,
+        "Joining a server after solo replaces the last session and preserves server encryption");
+    soloStorage.Save(solo, "");
+    Check(soloStorage.Load().IsLocalWorld && soloStorage.Load().ProtectedPassword == "",
+        "Starting solo after a server replaces its credentials with a passwordless world record");
+    string legacyRemotePath = Path.Combine(folder, "legacy-remote.json");
+    File.WriteAllText(legacyRemotePath, "{\"Version\":1,\"ServerKind\":\"Dedicated\",\"Address\":\"legacy.invalid\",\"Port\":2456,\"CharacterFilename\":\"legacy_character\",\"CharacterId\":42,\"ProtectedPassword\":\"\"}");
+    Check(new SessionStore(legacyRemotePath).Load().IsValid() && !new SessionStore(legacyRemotePath).Load().IsLocalWorld,
+        "Existing 1.0.2 server JSON remains readable without world fields or migration");
+
+    string gameAssembly = args.Length > 0 ? Path.GetFullPath(args[0]) : @"G:\Games\SteamLibrary\steamapps\common\Valheim\valheim_Data\Managed\assembly_valheim.dll";
     using (var gameStream = File.OpenRead(gameAssembly))
     using (var gamePe = new PEReader(gameStream))
     {
@@ -188,8 +236,21 @@ try
             }
             return false;
         }
-        foreach (string method in new[] { "Start", "JoinServer", "OnStartGame", "SelectCharacter", "TransitionToMainScene", "LoadMainScene" })
+        foreach (string method in new[] { "Start", "JoinServer", "OnStartGame", "OnWorldStart", "SelectCharacter", "TransitionToMainScene", "LoadMainScene" })
             Check(HasMember("FejdStartup", method), "Installed Valheim menu API: " + method);
+        foreach (string field in new[] { "m_world", "m_profiles", "m_profileIndex", "m_openServerToggle", "m_publicServerToggle", "m_crossplayServerToggle", "m_serverPassword" })
+            Check(HasMember("FejdStartup", field, true), "Installed native single-player menu state: " + field);
+        Check(HasMember("ZNet", "GetWorldIfIsHost") && HasMember("ZNet", "SetServer"), "Installed single-player launch and loaded-world APIs exist");
+        foreach (string field in new[] { "m_worldName", "m_uid", "m_dataError", "m_menu" })
+            Check(HasMember("World", field, true), "Installed saved-world identity API: " + field);
+        var netType = metadata.TypeDefinitions.Select(handle => metadata.GetTypeDefinition(handle))
+            .Single(type => metadata.GetString(type.Name) == "ZNet");
+        var setServer = netType.GetMethods().Select(handle => metadata.GetMethodDefinition(handle))
+            .Single(method => metadata.GetString(method.Name) == "SetServer");
+        Check((setServer.Attributes & System.Reflection.MethodAttributes.Static) != 0 &&
+            setServer.GetParameters().Select(handle => metadata.GetString(metadata.GetParameter(handle).Name))
+                .SequenceEqual(new[] { "server", "openServer", "publicServer", "serverName", "password", "world" }),
+            "Single-player Harmony hook matches the unique installed SetServer signature");
         Check(HasMember("FejdStartup", "<ServerPassword>k__BackingField", true), "Installed password integration exists");
         Check(HasMember("FejdStartup", "m_menuButtons", true), "Installed menu navigation integration exists");
         Check(HasMember("ZNet", "SendPeerInfo"), "Installed password capture hook exists");
