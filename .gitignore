@@ -7,3 +7,12 @@ research/
 dist/
 backups/
 *.user
+# Keep AI generation prompts out of the public repository.
+*prompt*.txt
+*prompt*.md
+*prompt*.json
+*Prompt*.txt
+*Prompt*.md
+*Prompt*.json
+prompts/
+Prompts/
