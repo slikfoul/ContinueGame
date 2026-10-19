@@ -1,3 +1,10 @@
+# 1.1.0
+
+- Shows the full server or single-player world name and saved character beside Continue when hovering over the button.
+- Retries temporary server connection failures up to three total attempts, with a five-second delay and cancellation.
+- Explains rejected server passwords and lets you enter a replacement through Valheim's password prompt.
+- Resumes player-hosted worlds with their saved Start Server, Community Server, Crossplay and encrypted password settings.
+
 # 1.0.3
 
 - Continue your last single-player world with the saved character from the main menu.

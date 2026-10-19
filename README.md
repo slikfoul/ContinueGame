@@ -1,19 +1,23 @@
 # ContinueGame
 
-Continue your last single-player world or Valheim server session with one click from the main menu.
+Resume your last Valheim session with one click: a single-player world, your own hosted world or a remote server.
 
-![Continue button in the Valheim main menu](https://raw.githubusercontent.com/slikfoul/ContinueGame/main/docs/screenshots/continue-button.png)
+![Continue button with local server and character details in the Valheim main menu](https://raw.githubusercontent.com/slikfoul/ContinueGame/main/docs/screenshots/continue-button.png)
 
 ## Features
 
 - Adds a **Continue** button that selects your saved character and resumes your last single-player world or server.
+- Shows the full server or world name and saved character beside **Continue** when you hover over the button.
+- Tries a server connection up to three times, waiting five seconds between attempts after a temporary connection failure.
+- Requests a new password if the server rejects the saved one, and remembers it after a successful login.
+- Resumes your own hosted world with its saved **Start Server**, **Community Server**, **Crossplay** and encrypted server password settings.
 - Remembers the world or server and character after you successfully enter the game. Server passwords are encrypted.
 - Shows **Loading**, the current connection stage and an animated gold bar while waiting for Valheim's loading screen.
 - Supports dedicated server addresses, Steam connections and crossplay servers through PlayFab.
 
 ## Installation
 
-Requires **BepInEx 5** configured for your Valheim installation. Install the mod on your game client. Runtime compatibility on macOS has not yet been verified.
+Requires **BepInEx 5** configured for your Valheim installation. Install the mod on your game client.
 
 1. Close Valheim.
 2. Copy the archive's `BepInEx` folder into your game directory or existing mod manager profile. The DLL belongs in `BepInEx/plugins/ContinueGame/`.
@@ -21,11 +25,13 @@ Requires **BepInEx 5** configured for your Valheim installation. Install the mod
 
 ## How to use
 
-Start a single-player world or connect to a server normally once, selecting your character and entering a server password if required. After your character appears in the game, return to the main menu or restart the game and press **Continue**.
+Start a single-player world, host a world or join a server normally once. Choose your character and enter any required server password. After your character appears in the game, return to the main menu or restart the game and press **Continue**.
 
-The button becomes available once a session has been saved. Each successful start or connection updates the saved session; failed attempts keep the previous one. If the server password changes, connect normally with the new password to save it.
+Hover over **Continue** to see the full destination name and saved character to the right of the button. The destination is labelled **Local** for a single-player world, **Local server** for your own world with **Start Server** enabled, or **Server** for a remote server. The details are hidden when you move the pointer away.
 
-Single-player worlds resume in single-player mode, including worlds stored in Valheim cloud saves. Worlds opened by your own client as a multiplayer server are not remembered. If a saved world or character has been removed, start a game normally to choose a new session.
+The button becomes available once a session has been saved. Each successful start or connection updates the saved session; failed attempts keep the previous one.
+
+Single-player worlds resume in single-player mode, including worlds stored in Valheim cloud saves. Worlds hosted by your own client resume with the saved server toggles and password. Start a hosted world normally once and wait for your character to appear to remember these settings. If a saved world or character has been removed, start a game normally to choose a new session.
 
 ## Saved data
 

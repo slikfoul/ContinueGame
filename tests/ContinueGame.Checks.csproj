@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../SessionRecord.cs" Link="SessionRecord.cs" />
+    <Compile Include="../ResumeLabel.cs" Link="ResumeLabel.cs" />
+    <Compile Include="../ConnectionAttempts.cs" Link="ConnectionAttempts.cs" />
     <Compile Include="../PasswordProtection.cs" Link="PasswordProtection.cs" />
     <Compile Include="../PortablePasswordProtection.cs" Link="PortablePasswordProtection.cs" />
     <Compile Include="../LoadingState.cs" Link="LoadingState.cs" />

@@ -25,6 +25,8 @@ namespace ContinueGame
         private readonly Texture2D _shineTexture;
         private readonly Sprite _shineSprite;
         private readonly float _startedAt;
+        private int _attempt;
+        private int _maximumAttempts;
         public bool IsFinished { get; private set; }
 
         public ContinueLoadingScreen(FejdStartup startup)
@@ -84,6 +86,7 @@ namespace ContinueGame
 
         private static bool Russian => Localization.instance != null && Localization.instance.GetSelectedLanguage() == "Russian";
         public void Advance(LoadingStage stage) { _state.Advance(stage); }
+        public void SetAttempt(int attempt, int maximum) { _attempt = attempt; _maximumAttempts = maximum; }
 
         // Only read native visibility. Never add content to, or modify, Valheim's loading UI.
         public void HandOffToNative(Hud hud)
@@ -105,6 +108,7 @@ namespace ContinueGame
             HandOffToNative(Hud.instance);
             if (IsFinished) return;
             string status = (Russian ? RussianStages : EnglishStages)[(int)_state.Stage];
+            if (_attempt > 1 && _maximumAttempts > 1) status += string.Format(" (attempt {0}/{1})", _attempt, _maximumAttempts);
             if (_stageText.text != status) _stageText.text = status;
             float phase = Mathf.Repeat((Time.unscaledTime - _startedAt + 0.9f) / 2.6f, 1f);
             _shine.anchoredPosition = new Vector2(Mathf.Lerp(-95f, 655f, Mathf.SmoothStep(0f, 1f, phase)), 0f);

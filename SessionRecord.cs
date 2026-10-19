@@ -13,17 +13,32 @@ namespace ContinueGame
         [DataMember] public string Address;
         [DataMember] public int Port;
         [DataMember] public string ServerOwner;
+        [DataMember(EmitDefaultValue = false)] public string ServerName;
         [DataMember] public string CharacterFilename;
+        [DataMember(EmitDefaultValue = false)] public string CharacterName;
         [DataMember] public long CharacterId;
         [DataMember] public string ProtectedPassword;
         [DataMember(EmitDefaultValue = false)] public string WorldName;
         [DataMember(EmitDefaultValue = false)] public long WorldId;
+        [DataMember(EmitDefaultValue = false)] public bool StartServer;
+        [DataMember(EmitDefaultValue = false)] public bool CommunityServer;
+        [DataMember(EmitDefaultValue = false)] public bool Crossplay;
 
         public bool IsLocalWorld => ServerKind == "LocalWorld";
+        public bool IsHostedWorld => ServerKind == "HostedWorld";
+        public bool IsWorld => IsLocalWorld || IsHostedWorld;
+
+        public bool MatchesServer(SessionRecord other)
+        {
+            return other != null && !IsWorld && !other.IsWorld &&
+                ServerKind == other.ServerKind && Port == other.Port &&
+                string.Equals(Address, other.Address, StringComparison.Ordinal) &&
+                string.Equals(ServerOwner, other.ServerOwner, StringComparison.Ordinal);
+        }
 
         public bool MatchesWorld(string name, long id)
         {
-            return IsLocalWorld && WorldId != 0 && WorldId == id &&
+            return IsWorld && WorldId != 0 && WorldId == id &&
                 string.Equals(WorldName, name, StringComparison.Ordinal);
         }
 
@@ -31,7 +46,13 @@ namespace ContinueGame
         {
             if (Version != 1 || string.IsNullOrWhiteSpace(CharacterFilename) || ProtectedPassword == null)
                 return false;
-            if (IsLocalWorld) return !string.IsNullOrWhiteSpace(WorldName) && WorldId != 0 && ProtectedPassword.Length == 0;
+            if (IsWorld)
+            {
+                if (string.IsNullOrWhiteSpace(WorldName) || WorldId == 0) return false;
+                if (IsHostedWorld) return StartServer;
+                return !StartServer && !CommunityServer && !Crossplay && ProtectedPassword.Length == 0;
+            }
+            if (StartServer || CommunityServer || Crossplay) return false;
             if (string.IsNullOrWhiteSpace(Address)) return false;
             if (ServerKind == "Dedicated") return Port > 0 && Port <= ushort.MaxValue;
             if (ServerKind == "PlayFab") return true;

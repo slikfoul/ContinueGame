@@ -207,10 +207,154 @@ try
     soloStorage.Save(solo, "");
     Check(soloStorage.Load().IsLocalWorld && soloStorage.Load().ProtectedPassword == "",
         "Starting solo after a server replaces its credentials with a passwordless world record");
+
+    var hosted = new SessionRecord
+    {
+        ServerKind = "HostedWorld", WorldName = "Synthetic hosted world", WorldId = 998877,
+        CharacterFilename = "host_character", CharacterName = "Host Ragnar", CharacterId = 334455,
+        StartServer = true
+    };
+    string hostedData = Path.Combine(folder, "hosted-game-data");
+    var hostedStorage = new PrivateSessionStorage(configDirectory, hostedData);
+    foreach (bool community in new[] { false, true })
+    foreach (bool crossplay in new[] { false, true })
+    {
+        hosted.CommunityServer = community;
+        hosted.Crossplay = crossplay;
+        hostedStorage.Save(hosted, testPassword);
+        var restoredHost = new PrivateSessionStorage(configDirectory, hostedData).Load();
+        Check(restoredHost.IsHostedWorld && restoredHost.IsWorld && !restoredHost.IsLocalWorld &&
+            restoredHost.StartServer && restoredHost.CommunityServer == community && restoredHost.Crossplay == crossplay,
+            "Hosted launch toggles survive restart: community=" + community + ", crossplay=" + crossplay);
+        Check(hostedStorage.PasswordProtection.Unprotect(restoredHost.ProtectedPassword) == testPassword &&
+            !File.ReadAllText(Path.Combine(hostedStorage.DirectoryPath, "last-session.json")).Contains(testPassword),
+            "Hosted password uses the existing encrypted store without plaintext: community=" + community + ", crossplay=" + crossplay);
+    }
+    Check(hosted.MatchesWorld("Synthetic hosted world", 998877) && !hosted.MatchesWorld("Synthetic hosted world", 998878),
+        "Hosted Continue finds the exact saved world UID");
+    Check(!hosted.MatchesServer(record) && !record.MatchesServer(hosted), "Hosted worlds are never restored as remote server endpoints");
+    Check(ResumeLabel.Details(hosted, null!) == "Local server: Synthetic hosted world\nCharacter: Host Ragnar",
+        "Hosted hover details distinguish a local server from solo worlds and remote servers");
+    byte[] lastHost = File.ReadAllBytes(Path.Combine(hostedStorage.DirectoryPath, "last-session.json"));
+    hosted.StartServer = false;
+    Check(!hosted.IsValid() && Rejects(() => hostedStorage.Save(hosted, testPassword)),
+        "A hosted record cannot silently lose its explicit Start Server flag");
+    Check(lastHost.SequenceEqual(File.ReadAllBytes(Path.Combine(hostedStorage.DirectoryPath, "last-session.json"))),
+        "An invalid hosted update preserves the previous successful host settings and password");
+    hosted.StartServer = true;
+    hosted.CommunityServer = false;
+    hosted.Crossplay = false;
+    hostedStorage.Save(hosted, "");
+    Check(hostedStorage.Load().IsHostedWorld && hostedStorage.Load().ProtectedPassword == "",
+        "Private player-hosted worlds may resume without a server password");
+    hostedStorage.Save(solo, "");
+    var soloAfterHost = hostedStorage.Load();
+    Check(soloAfterHost.IsLocalWorld && !soloAfterHost.StartServer && !soloAfterHost.CommunityServer &&
+        !soloAfterHost.Crossplay && soloAfterHost.ProtectedPassword == "",
+        "A later solo session cannot inherit hosting flags or its old password");
+    solo.StartServer = true;
+    Check(!solo.IsValid(), "Existing solo records cannot be changed into hosts by a stray flag");
+    solo.StartServer = false;
+    string legacySoloPath = Path.Combine(folder, "legacy-solo.json");
+    File.WriteAllText(legacySoloPath, "{\"Version\":1,\"ServerKind\":\"LocalWorld\",\"WorldName\":\"Legacy world\",\"WorldId\":123,\"CharacterFilename\":\"legacy_character\",\"CharacterId\":42,\"ProtectedPassword\":\"\"}");
+    var legacySolo = new SessionStore(legacySoloPath).Load();
+    Check(legacySolo.IsLocalWorld && !legacySolo.StartServer && !legacySolo.CommunityServer && !legacySolo.Crossplay,
+        "Existing 1.0.3 solo JSON remains private without migration or hosting fields");
     string legacyRemotePath = Path.Combine(folder, "legacy-remote.json");
     File.WriteAllText(legacyRemotePath, "{\"Version\":1,\"ServerKind\":\"Dedicated\",\"Address\":\"legacy.invalid\",\"Port\":2456,\"CharacterFilename\":\"legacy_character\",\"CharacterId\":42,\"ProtectedPassword\":\"\"}");
     Check(new SessionStore(legacyRemotePath).Load().IsValid() && !new SessionStore(legacyRemotePath).Load().IsLocalWorld,
         "Existing 1.0.2 server JSON remains readable without world fields or migration");
+
+    var legacyRemote = new SessionStore(legacyRemotePath).Load();
+    Check(legacyRemote.ServerName == null && ResumeLabel.Details(legacyRemote, null!) == "",
+        "Old saved session without display names has no placeholder details");
+    Check(ResumeLabel.Details(new SessionRecord { ServerName = " \r\n\t" }, null!) == "",
+        "Whitespace-only server names do not append a placeholder or colon");
+    Check(ResumeLabel.Details(null!, "Ragnar") == "", "No saved session has no invented destination or character");
+    Check(ResumeLabel.Details(solo, "Ragnar") == "Local: Synthetic solo world\nCharacter: Ragnar",
+        "Local details show the actual world and character on separate lines");
+    legacyRemote.ServerName = "Домашний сервер — Northern Realm";
+    legacyRemote.CharacterName = "Рагнар";
+    new SessionStore(legacyRemotePath).Save(legacyRemote);
+    var namedRemote = new SessionStore(legacyRemotePath).Load();
+    Check(namedRemote.ServerName == legacyRemote.ServerName && namedRemote.Version == 1,
+        "Unicode server display name survives restart without changing the session schema");
+    Check(namedRemote.CharacterName == "Рагнар", "Actual character display name survives session serialization");
+    Check(ResumeLabel.Details(namedRemote, null!) == "Server: Домашний сервер — Northern Realm\nCharacter: Рагнар",
+        "Remote details use saved display names rather than endpoint and character filename");
+    Check(ResumeLabel.Details(namedRemote, "Renamed character").EndsWith("Character: Renamed character"),
+        "The matching live character profile supplies its current display name");
+    Check(ResumeLabel.Normalize("  My\r\nserver\t\0  ") == "My server", "Control characters cannot add lines to the menu");
+    Check(ResumeLabel.Details(new SessionRecord { ServerName = "<color=red>MyServer</color>" }, null!) ==
+        "Server: <color=red>MyServer</color>", "Details retain literal markup-like names for plain-text rendering");
+    Check(ResumeLabel.Normalize(new string('x', 300))!.Length == 300, "Full destination names are never shortened");
+    Check(ResumeLabel.Details(new SessionRecord { ServerName = new string('x', 300) }, "Ragnar") ==
+        "Server: " + new string('x', 300) + "\nCharacter: Ragnar", "Long server names do not truncate or consume the character row");
+    Check(ResumeLabel.Normalize("A😀BC") == "A😀BC", "Full names retain UTF-16 surrogate pairs");
+    Check(ResumeLabel.Normalize("Ae\u0301BC") == "Ae\u0301BC", "Full names retain combining accents");
+    Check(ResumeLabel.ServerName(namedRemote, null!, "Renamed server") == "Renamed server", "Fresh matchmaking name supersedes an old name");
+    Check(ResumeLabel.ServerName(namedRemote, null!, null!) == namedRemote.ServerName, "Temporary name lookup failure retains the captured name");
+    var sameEndpoint = new SessionRecord { ServerKind = namedRemote.ServerKind, Address = namedRemote.Address, Port = namedRemote.Port };
+    Check(ResumeLabel.ServerName(sameEndpoint, namedRemote, null!) == namedRemote.ServerName,
+        "Continue keeps the previous name when matchmaking has no cached result after restart");
+    sameEndpoint.Address = "different.invalid";
+    Check(ResumeLabel.ServerName(sameEndpoint, namedRemote, null!) == null, "A different server never inherits the previous server name");
+    sameEndpoint.Address = namedRemote.Address;
+    sameEndpoint.Port++;
+    Check(ResumeLabel.ServerName(sameEndpoint, namedRemote, null!) == null, "A different server port never inherits the previous name");
+    Check(ResumeLabel.ServerName(solo, namedRemote, null!) == null, "World and server names cannot be confused");
+    namedRemote.Port = 0;
+    namedRemote.ServerName = "Failed attempt";
+    byte[] lastNamedSession = File.ReadAllBytes(legacyRemotePath);
+    Check(Rejects(() => new SessionStore(legacyRemotePath).Save(namedRemote)) && lastNamedSession.SequenceEqual(File.ReadAllBytes(legacyRemotePath)),
+        "Rejected session cannot replace the saved destination name");
+
+    var attempts = new ConnectionAttempts();
+    Check(!attempts.Active && !attempts.TryBegin(100, true), "Ordinary joining never starts Continue retries");
+    attempts.Start();
+    Check(attempts.Active && attempts.Attempt == 1, "Continue starts with the first of three total network attempts");
+    Check(attempts.Fail(ResumeFailure.Network, 10) && attempts.WaitingForRetry && attempts.NextAt == 15,
+        "A temporary connection failure schedules a five-second retry");
+    attempts.Fail(ResumeFailure.Network, 11);
+    Check(attempts.NextAt == 15 && attempts.Attempt == 1, "Duplicate error callbacks do not reset the timer or consume attempts");
+    Check(!attempts.TryBegin(14.9, true), "Retry never starts before its delay expires");
+    Check(!attempts.TryBegin(30, false), "Retry waits for native connection teardown and a ready menu");
+    Check(attempts.TryBegin(30, true) && attempts.Attempt == 2, "Ready menu starts the second attempt once");
+    Check(!attempts.TryBegin(31, true), "A running attempt cannot be launched a second time");
+    attempts.Fail(ResumeFailure.Network, 40);
+    Check(attempts.TryBegin(45, true) && attempts.Attempt == 3, "Second failure permits the third and final attempt");
+    Check(!attempts.Fail(ResumeFailure.Network, 50) && !attempts.Active && !attempts.TryBegin(100, true),
+        "Three failed network attempts end the sequence without an unattended fourth attempt");
+    attempts.Start();
+    Check(!attempts.Fail(ResumeFailure.Other, 1) && !attempts.Active,
+        "Non-retryable rejection stops rather than bypassing native version or access errors");
+    attempts.Start();
+    Check(attempts.Fail(ResumeFailure.Password, 1) && attempts.WaitingForPassword && attempts.NeedsPassword,
+        "Password rejection switches to human confirmation instead of resending the old password");
+    Check(!attempts.TryBegin(100, true), "Password recovery cannot reconnect automatically before user acknowledgement");
+    attempts.ConfirmPassword(100);
+    Check(attempts.WaitingForRetry && attempts.TryBegin(100, true) && attempts.Attempt == 1 && attempts.NeedsPassword,
+        "Explicit password confirmation starts a fresh bounded sequence requiring the native password prompt");
+    attempts.PasswordEntered();
+    Check(!attempts.NeedsPassword, "Newly entered password can be reused within the current connection sequence");
+    attempts.Fail(ResumeFailure.Network, 110);
+    Check(attempts.TryBegin(115, true) && !attempts.NeedsPassword,
+        "A network failure after password entry does not select the rejected saved password again");
+    attempts.Fail(ResumeFailure.Password, 120);
+    Check(attempts.WaitingForPassword && attempts.NeedsPassword && !attempts.TryBegin(999, true),
+        "A rejected replacement password again requires a human action");
+    attempts.Cancel();
+    attempts.ConfirmPassword(1000);
+    Check(!attempts.Active && !attempts.TryBegin(1000, true), "Cancelling password recovery cannot be undone by a stale acknowledgement");
+    attempts.Start();
+    attempts.Fail(ResumeFailure.Network, 1);
+    attempts.Cancel();
+    Check(!attempts.TryBegin(1000, true), "Cancelling a countdown prevents all scheduled retries");
+    attempts.Start();
+    Check(attempts.Attempt == 1 && !attempts.NeedsPassword && !attempts.WaitingForRetry,
+        "A later manual Continue starts clean with its own attempt budget");
+    attempts.Cancel();
+    Check(!attempts.Fail(ResumeFailure.Network, 1000), "A disconnect after successful session completion never starts a reconnect loop");
 
     string gameAssembly = args.Length > 0 ? Path.GetFullPath(args[0]) : @"G:\Games\SteamLibrary\steamapps\common\Valheim\valheim_Data\Managed\assembly_valheim.dll";
     using (var gameStream = File.OpenRead(gameAssembly))
@@ -240,7 +384,8 @@ try
             Check(HasMember("FejdStartup", method), "Installed Valheim menu API: " + method);
         foreach (string field in new[] { "m_world", "m_profiles", "m_profileIndex", "m_openServerToggle", "m_publicServerToggle", "m_crossplayServerToggle", "m_serverPassword" })
             Check(HasMember("FejdStartup", field, true), "Installed native single-player menu state: " + field);
-        Check(HasMember("ZNet", "GetWorldIfIsHost") && HasMember("ZNet", "SetServer"), "Installed single-player launch and loaded-world APIs exist");
+        Check(HasMember("ZNet", "GetWorldIfIsHost") && HasMember("ZNet", "SetServer") && HasMember("ZNet", "IsOpenServer"), "Installed native world launch and actual hosting-state APIs exist");
+        Check(HasMember("FejdStartup", "CanStartServer"), "Hosted Continue can use native world and password validation");
         foreach (string field in new[] { "m_worldName", "m_uid", "m_dataError", "m_menu" })
             Check(HasMember("World", field, true), "Installed saved-world identity API: " + field);
         var netType = metadata.TypeDefinitions.Select(handle => metadata.GetTypeDefinition(handle))
@@ -253,6 +398,12 @@ try
             "Single-player Harmony hook matches the unique installed SetServer signature");
         Check(HasMember("FejdStartup", "<ServerPassword>k__BackingField", true), "Installed password integration exists");
         Check(HasMember("FejdStartup", "m_menuButtons", true), "Installed menu navigation integration exists");
+        Check(HasMember("MultiBackendMatchmaking", "TryGetServerName"), "Installed matchmaking exposes server display names");
+        Check(HasMember("PlayerProfile", "GetName"), "Installed character API exposes the actual display name");
+        Check(HasMember("FejdStartup", "ShowConnectError") && HasMember("FejdStartup", "OnConnectionFailedOk") &&
+            HasMember("FejdStartup", "m_connectionFailedPanel", true) && HasMember("FejdStartup", "m_connectionFailedError", true),
+            "Installed native error UI supports bounded retries and password-rejection explanation");
+        Check(HasMember("Game", "Logout") && HasMember("ZNet", "RPC_Error"), "Installed error/logout hooks can retain retry intent across scene changes");
         Check(HasMember("ZNet", "SendPeerInfo"), "Installed password capture hook exists");
         Check(HasMember("ZNet", "InPasswordDialog"), "Installed password-dialog integration exists");
         foreach (string method in new[] { "ClientConnect", "RPC_ClientHandshake", "RPC_PeerInfo" })
